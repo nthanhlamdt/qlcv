@@ -1,10 +1,11 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
-import { getJson } from '@/lib/api'
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { getJson, postJson } from '@/lib/api'
+import { getAllCookies } from '@/lib/cookies'
 
 interface User {
-  id: string
+  _id: string
   name: string
   email: string
   avatar?: {
@@ -32,12 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const checkAuth = async () => {
     try {
+      // Debug: Log cookies before checking auth
+      console.log('Cookies before auth check:', getAllCookies())
+
       // Kiểm tra xem có token trong cookie không
       const response = await getJson('/auth/me')
       if (response.success && response.user) {
         setUser(response.user)
+        scheduleRefresh()
       }
     } catch (error) {
+      console.error('Auth check error:', error)
       // Không có token hoặc token không hợp lệ
       setUser(null)
     } finally {
@@ -45,12 +51,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  // Auto refresh access token ~5 minutes before expiry
+  const refreshTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const clearRefreshTimer = () => {
+    if (refreshTimerRef.current) {
+      clearTimeout(refreshTimerRef.current)
+      refreshTimerRef.current = null
+    }
+  }
+
+  const scheduleRefresh = (msUntilExpiry: number = 60 * 60 * 1000) => {
+    // Default assumes 1h expiry; refresh 5 minutes before
+    const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 30 * 1000)
+    clearRefreshTimer()
+    refreshTimerRef.current = setTimeout(async () => {
+      try {
+        await postJson('/auth/refresh-token', {})
+        // After refreshing, schedule the next one again
+        scheduleRefresh(60 * 60 * 1000)
+      } catch (e) {
+        console.error('Auto refresh failed:', e)
+        setUser(null)
+        clearRefreshTimer()
+      }
+    }, refreshIn)
+  }
+
   const login = (userData: User) => {
     setUser(userData)
+    scheduleRefresh()
   }
 
   const logout = () => {
     setUser(null)
+    clearRefreshTimer()
   }
 
   return (

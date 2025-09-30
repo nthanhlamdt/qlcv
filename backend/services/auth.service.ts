@@ -4,15 +4,15 @@ import { UserModel } from '../models/user.model'
 
 const JWT_SECRET: Secret = (process.env.JWT_SECRET || 'dev-secret') as Secret
 const JWT_REFRESH_SECRET: Secret = (process.env.JWT_REFRESH_SECRET || 'dev-refresh-secret') as Secret
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '5m'
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '1h'
 const JWT_REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES_IN || '3d'
 
 function signToken(userId: string) {
-  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN })
+  return jwt.sign({ sub: userId }, process.env.JWT_SECRET as string, { expiresIn: JWT_EXPIRES_IN })
 }
 
 function signRefreshToken(userId: string) {
-  return jwt.sign({ sub: userId }, JWT_REFRESH_SECRET, { expiresIn: JWT_REFRESH_EXPIRES_IN })
+  return jwt.sign({ sub: userId }, process.env.JWT_REFRESH_SECRET as string, { expiresIn: JWT_REFRESH_EXPIRES_IN })
 }
 
 export async function registerUser(params: { name: string; email: string; password: string }) {

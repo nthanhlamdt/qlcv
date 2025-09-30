@@ -14,6 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { postJson } from "@/lib/api"
 import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
+import { getAllCookies } from "@/lib/cookies"
 
 const loginSchema = z.object({
   email: z.string().email("Email không hợp lệ"),
@@ -40,6 +41,9 @@ export default function LoginForm({ isLoading }: LoginFormProps) {
       setSubmitting(true)
       const res = await postJson('/auth/login', values)
       if (res.success) {
+        // Debug: Log cookies after login
+        console.log('Cookies after login:', getAllCookies())
+
         login(res.user)
         toast.success("Đăng nhập thành công!")
         router.push("/")
@@ -48,6 +52,7 @@ export default function LoginForm({ isLoading }: LoginFormProps) {
         toast.error(res.message || "Đăng nhập thất bại")
       }
     } catch (e: any) {
+      console.error('Login error:', e)
       toast.error(e.message || "Đăng nhập thất bại")
     } finally {
       setSubmitting(false)

@@ -3,6 +3,7 @@ import authRoutes from './auth.routes'
 import notificationRoutes from './notification.routes'
 import realtimeRoutes from './realtime.routes'
 import teamRoutes from './team.routes'
+import taskRoutes from './task.routes'
 
 const router = express.Router()
 
@@ -11,6 +12,7 @@ router.use('/auth', authRoutes)
 router.use('/notifications', notificationRoutes)
 router.use('/realtime', realtimeRoutes)
 router.use('/teams', teamRoutes)
+router.use('/', taskRoutes)
 
 // Root endpoint
 router.get('/', (req, res) => {

@@ -11,7 +11,6 @@ interface AuthenticatedRequest extends Request {
 }
 import {
   createTeam,
-  getTeams,
   getTeamById,
   updateTeam,
   deleteTeam,
@@ -24,6 +23,7 @@ import {
   CreateTeamData,
   InviteMemberData,
   TeamFilters,
+  getTeams,
 } from '../services/team.service'
 
 // Tạo nhóm mới
@@ -70,6 +70,7 @@ export const getUserTeams = CatchAsyncError(async (req: AuthenticatedRequest, re
 
   const result = await getTeams(filters)
 
+  console.log(result)
   res.status(200).json({
     success: true,
     data: result,
@@ -131,7 +132,8 @@ export const deleteTeamById = CatchAsyncError(async (req: AuthenticatedRequest, 
 
 // Mời thành viên mới
 export const inviteTeamMember = CatchAsyncError(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  const { teamId, inviteeEmail, role, message } = req.body
+  const teamId = req.params.teamId
+  const { inviteeEmail, role, message } = req.body
   const inviterId = req.user?.id
 
   if (!inviterId) {
@@ -142,12 +144,14 @@ export const inviteTeamMember = CatchAsyncError(async (req: AuthenticatedRequest
     return next(new Error('Thiếu thông tin bắt buộc'))
   }
 
+  console.log(teamId)
   const inviteData: InviteMemberData = {
     teamId,
     inviteeEmail,
     role,
     message,
   }
+
 
   const invite = await inviteMember(inviteData, inviterId)
 

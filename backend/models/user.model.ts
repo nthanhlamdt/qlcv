@@ -68,7 +68,7 @@ userSchema.methods.comparePassword = async function (enteredPassword: string): P
 // Tạo Access Token
 userSchema.methods.signAccessToken = function (): string {
   return jwt.sign({ id: this._id }, process.env.JWT_SECRET || '', {
-    expiresIn: process.env.JWT_EXPIRES_IN || '5m',
+    expiresIn: process.env.JWT_EXPIRES_IN || '1h',
   })
 }
 

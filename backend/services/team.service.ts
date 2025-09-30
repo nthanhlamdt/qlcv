@@ -33,7 +33,7 @@ export interface TeamFilters {
 }
 
 // Tạo nhóm mới
-export const createTeam = CatchAsyncError(async (data: CreateTeamData, ownerId: string): Promise<ITeam> => {
+export const createTeam = async (data: CreateTeamData, ownerId: string): Promise<ITeam> => {
   const { name, description, avatarUrl, settings } = data
 
   if (!name || !ownerId) {
@@ -69,10 +69,10 @@ export const createTeam = CatchAsyncError(async (data: CreateTeamData, ownerId: 
   await team.populate('members.user', 'name email avatarUrl')
 
   return team
-})
+}
 
 // Lấy danh sách nhóm
-export const getTeams = CatchAsyncError(async (filters: TeamFilters): Promise<any> => {
+export const getTeams = async (filters: TeamFilters): Promise<{ teams: ITeam[]; pagination: { current: number; pages: number; total: number } }> => {
   const { ownerId, memberId, isActive = true, limit = 20, page = 1 } = filters
 
   const query: any = { isActive }
@@ -105,10 +105,10 @@ export const getTeams = CatchAsyncError(async (filters: TeamFilters): Promise<an
       total,
     },
   }
-})
+}
 
 // Lấy thông tin nhóm theo ID
-export const getTeamById = CatchAsyncError(async (teamId: string, userId: string): Promise<ITeam> => {
+export const getTeamById = async (teamId: string, userId: string): Promise<ITeam | null> => {
   const team = await TeamModel.findById(teamId)
     .populate('owner', 'name email avatarUrl')
     .populate('members.user', 'name email avatarUrl')
@@ -117,21 +117,17 @@ export const getTeamById = CatchAsyncError(async (teamId: string, userId: string
     throw new ErrorHandler('Nhóm không tồn tại', 404)
   }
 
-  // Kiểm tra user có quyền xem nhóm không
-  const isMember = team.members.some(
-    member => member.user.toString() === userId && member.status === 'active'
-  )
-  const isOwner = team.owner.toString() === userId
-
-  if (!isMember && !isOwner) {
-    throw new ErrorHandler('Bạn không có quyền xem nhóm này', 403)
+  // Cho phép tất cả user xem team (team management system)
+  // Chỉ kiểm tra nếu team không active
+  if (!team.isActive) {
+    throw new ErrorHandler('Nhóm này đã bị vô hiệu hóa', 403)
   }
 
-  return team
-})
+  return team || null
+}
 
 // Cập nhật thông tin nhóm
-export const updateTeam = CatchAsyncError(async (teamId: string, updateData: Partial<CreateTeamData>, userId: string): Promise<ITeam> => {
+export const updateTeam = async (teamId: string, updateData: Partial<CreateTeamData>, userId: string): Promise<ITeam | null> => {
   const team = await TeamModel.findById(teamId)
 
   if (!team) {
@@ -158,11 +154,11 @@ export const updateTeam = CatchAsyncError(async (teamId: string, updateData: Par
     .populate('owner', 'name email avatarUrl')
     .populate('members.user', 'name email avatarUrl')
 
-  return updatedTeam
-})
+  return updatedTeam || null
+}
 
 // Xóa nhóm
-export const deleteTeam = CatchAsyncError(async (teamId: string, userId: string): Promise<{ message: string }> => {
+export const deleteTeam = async (teamId: string, userId: string): Promise<{ message: string }> => {
   const team = await TeamModel.findById(teamId)
 
   if (!team) {
@@ -182,10 +178,10 @@ export const deleteTeam = CatchAsyncError(async (teamId: string, userId: string)
   await TeamModel.findByIdAndDelete(teamId)
 
   return { message: 'Nhóm đã được xóa thành công' }
-})
+}
 
 // Mời thành viên mới
-export const inviteMember = CatchAsyncError(async (data: InviteMemberData, inviterId: string): Promise<ITeamInvite> => {
+export const inviteMember = async (data: InviteMemberData, inviterId: string): Promise<ITeamInvite> => {
   const { teamId, inviteeEmail, role, message } = data
 
   // Kiểm tra team có tồn tại không
@@ -205,6 +201,9 @@ export const inviteMember = CatchAsyncError(async (data: InviteMemberData, invit
   if (!isOwner && !isAdmin) {
     throw new ErrorHandler('Bạn không có quyền mời thành viên', 403)
   }
+
+  // Kiểm tra email có tồn tại không (nếu muốn chỉ mời user đã đăng ký)
+  const inviteeUserDoc = await UserModel.findOne({ email: inviteeEmail })
 
   // Kiểm tra email đã được mời chưa
   const existingInvite = await TeamInviteModel.findOne({
@@ -226,29 +225,44 @@ export const inviteMember = CatchAsyncError(async (data: InviteMemberData, invit
     throw new ErrorHandler('Email này đã là thành viên của nhóm', 409)
   }
 
-  // Tìm user theo email (nếu có tài khoản)
-  const inviteeUser = await UserModel.findOne({ email: inviteeEmail })
 
-  // Tạo lời mời
-  const invite = await TeamInviteModel.create({
+  // Tìm user theo email (nếu có tài khoản)
+  const inviteeUser = inviteeUserDoc?._id
+  // Tạo lời mời (dùng save để đảm bảo pre-save tạo token)
+  const invite = new TeamInviteModel({
     team: teamId,
     inviter: inviterId,
     inviteeEmail,
-    inviteeUser: inviteeUser?._id,
+    inviteeUser: (inviteeUser as any)?._id,
     role,
     message,
   })
 
+
+  try {
+    await invite.validate(); // surface validation errors early
+    await invite.save();     // pre-save will set token
+    console.log('Invite saved with token:', invite.token)
+  } catch (err: any) {
+    console.error('Save invite failed:', err?.message, err)
+    if (err?.code === 11000) {
+      throw new ErrorHandler('Token bị trùng, thử lại lần nữa', 409)
+    }
+    throw new ErrorHandler(err?.message || 'Không thể tạo lời mời', 500)
+  }
+
+  console.log(teamId, inviteeEmail, role, message, inviterId)
+
   // Gửi thông báo realtime nếu user đã có tài khoản
-  if (inviteeUser) {
+  if (inviteeUserDoc?._id) {
     try {
       await socketService.createAndSendNotification(
-        (inviteeUser._id as any).toString(),
+        inviteeUserDoc._id.toString(),
         'team_invite',
         'Lời mời tham gia nhóm',
         `Bạn được mời tham gia nhóm "${team.name}"`,
         inviterId,
-        { teamId, inviteId: invite._id }
+        { teamId, inviteId: invite._id, token: invite.token }
       )
     } catch (error) {
       console.error('Error sending realtime notification:', error)
@@ -258,11 +272,12 @@ export const inviteMember = CatchAsyncError(async (data: InviteMemberData, invit
   // TODO: Gửi email mời tham gia
   // await sendTeamInviteEmail(inviteeEmail, team.name, invite.token)
 
+
   return invite
-})
+}
 
 // Chấp nhận lời mời
-export const acceptInvite = CatchAsyncError(async (token: string, userId: string): Promise<{ message: string; team: ITeam }> => {
+export const acceptInvite = async (token: string, userId: string): Promise<{ message: string; team: ITeam }> => {
   const invite = await TeamInviteModel.findOne({
     token,
     status: 'pending',
@@ -319,7 +334,7 @@ export const acceptInvite = CatchAsyncError(async (token: string, userId: string
       teamMembers,
       'team_invite',
       'Thành viên mới tham gia',
-      `${user.name} đã tham gia nhóm "${team.name}"`,
+      `${user.name} đã chấp nhận lời mời tham gia nhóm "${team.name}"`,
       userId,
       { teamId: team._id, newMemberId: userId }
     )
@@ -328,10 +343,10 @@ export const acceptInvite = CatchAsyncError(async (token: string, userId: string
   }
 
   return { message: 'Đã chấp nhận lời mời tham gia nhóm', team }
-})
+}
 
 // Từ chối lời mời
-export const rejectInvite = CatchAsyncError(async (token: string, userId: string): Promise<{ message: string }> => {
+export const rejectInvite = async (token: string, userId: string): Promise<{ message: string }> => {
   const invite = await TeamInviteModel.findOne({
     token,
     status: 'pending',
@@ -353,11 +368,28 @@ export const rejectInvite = CatchAsyncError(async (token: string, userId: string
   invite.rejectedAt = new Date()
   await invite.save()
 
+  // Gửi thông báo cho team owner khi từ chối lời mời
+  try {
+    const team = await TeamModel.findById(invite.team)
+    if (team) {
+      await socketService.createAndSendNotification(
+        team.owner.toString(),
+        'team_invite',
+        'Lời mời bị từ chối',
+        `${user.name} đã từ chối lời mời tham gia nhóm "${team.name}"`,
+        userId,
+        { teamId: team._id, inviteId: invite._id }
+      )
+    }
+  } catch (error) {
+    console.error('Error sending rejection notification:', error)
+  }
+
   return { message: 'Đã từ chối lời mời tham gia nhóm' }
-})
+}
 
 // Lấy danh sách lời mời của user
-export const getUserInvites = CatchAsyncError(async (userId: string): Promise<ITeamInvite[]> => {
+export const getUserInvites = async (userId: string): Promise<ITeamInvite[]> => {
   const user = await UserModel.findById(userId)
   if (!user) {
     throw new ErrorHandler('User không tồn tại', 404)
@@ -373,10 +405,10 @@ export const getUserInvites = CatchAsyncError(async (userId: string): Promise<IT
     .sort({ createdAt: -1 })
 
   return invites
-})
+}
 
 // Xóa thành viên khỏi nhóm
-export const removeMember = CatchAsyncError(async (teamId: string, memberId: string, userId: string): Promise<{ message: string }> => {
+export const removeMember = async (teamId: string, memberId: string, userId: string): Promise<{ message: string }> => {
   const team = await TeamModel.findById(teamId)
 
   if (!team) {
@@ -412,10 +444,10 @@ export const removeMember = CatchAsyncError(async (teamId: string, memberId: str
   await team.save()
 
   return { message: 'Đã xóa thành viên khỏi nhóm' }
-})
+}
 
 // Cập nhật role thành viên
-export const updateMemberRole = CatchAsyncError(async (teamId: string, memberId: string, role: 'admin' | 'member', userId: string): Promise<{ message: string }> => {
+export const updateMemberRole = async (teamId: string, memberId: string, role: 'admin' | 'member', userId: string): Promise<{ message: string }> => {
   const team = await TeamModel.findById(teamId)
 
   if (!team) {
@@ -446,4 +478,4 @@ export const updateMemberRole = CatchAsyncError(async (teamId: string, memberId:
   }
 
   return { message: 'Đã cập nhật role thành viên' }
-})
+}

@@ -1,23 +1,10 @@
-import { Server as SocketIOServer } from 'socket.io'
+import { Server as SocketIOServer, Socket as IOSocket } from 'socket.io'
 import { Server as HTTPServer } from 'http'
 import jwt from 'jsonwebtoken'
 import { UserModel } from '../models/user.model'
 import { createNotification } from './notification.service'
 
-interface AuthenticatedSocket extends Socket {
-  user?: any
-}
-
-interface Socket {
-  id: string
-  user?: any
-  join: (room: string) => void
-  leave: (room: string) => void
-  emit: (event: string, data: any) => void
-  to: (room: string) => any
-  broadcast: any
-  disconnect: () => void
-}
+type AuthenticatedSocket = IOSocket & { user?: any }
 
 class SocketService {
   private io: SocketIOServer
@@ -40,7 +27,13 @@ class SocketService {
     // Middleware xác thực Socket.IO
     this.io.use(async (socket: AuthenticatedSocket, next) => {
       try {
-        const token = socket.handshake.auth.token || socket.handshake.headers.authorization?.split(' ')[1]
+        // Lấy token từ auth, Authorization header hoặc cookie 'token'
+        const cookieHeader = socket.handshake.headers.cookie || ''
+        const cookieTokenMatch = cookieHeader.match(/(?:^|; )token=([^;]+)/)
+        const token =
+          socket.handshake.auth.token ||
+          socket.handshake.headers.authorization?.split(' ')[1] ||
+          (cookieTokenMatch ? decodeURIComponent(cookieTokenMatch[1]) : undefined)
 
         if (!token) {
           return next(new Error('Token không tồn tại'))

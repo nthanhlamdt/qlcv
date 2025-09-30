@@ -1,178 +1,177 @@
 "use client"
 
-import { useState } from "react"
-import { TeamCard } from "@/components/teams/team-card"
-import { CreateTeamDialog } from "@/components/teams/create-team-dialog"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Plus, Search } from "lucide-react"
+import { CreateTeamDialog } from "@/components/teams/create-team-dialog"
+import { EditTeamDialog } from "@/components/teams/edit-team-dialog"
+import { TeamCard } from "@/components/teams/team-card"
+import { teamApi, Team } from "@/lib/team-api"
+import { toast } from "sonner"
+import { Search, Filter, Plus } from "lucide-react"
 
-const initialProjects = [
-  {
-    id: 1,
-    name: "Website Thương mại điện tử",
-    description:
-      "Dự án phát triển website bán hàng online với đầy đủ tính năng thanh toán, quản lý đơn hàng và tích hợp với các hệ thống vận chuyển.",
-    collaborators: [
-      { id: 1, name: "Nguyễn Văn A", avatar: "/user-avatar-1.png", role: "Project Lead" },
-      { id: 2, name: "Trần Thị B", avatar: "/diverse-user-avatar-set-2.png", role: "Frontend Developer" },
-      { id: 3, name: "Lê Văn C", avatar: "/diverse-user-avatars-3.png", role: "Backend Developer" },
-      { id: 4, name: "Phạm Thị D", avatar: "/user-avatar-4.png", role: "UI/UX Designer" },
-    ],
-    activeTasks: 15,
-    completedTasks: 42,
-    progress: 75,
-    deadline: "30/03/2024",
-    priority: "high" as const,
-    status: "active" as const,
-  },
-  {
-    id: 2,
-    name: "Ứng dụng Mobile Banking",
-    description:
-      "Phát triển ứng dụng ngân hàng di động với các tính năng chuyển tiền, thanh toán hóa đơn và quản lý tài khoản.",
-    collaborators: [
-      { id: 5, name: "Hoàng Văn E", avatar: "/diverse-user-avatars.png", role: "Mobile Developer" },
-      { id: 6, name: "Nguyễn Thị F", avatar: "/diverse-user-avatars.png", role: "Security Engineer" },
-      { id: 7, name: "Trần Văn G", avatar: "/user-avatar-1.png", role: "QA Engineer" },
-    ],
-    activeTasks: 12,
-    completedTasks: 28,
-    progress: 60,
-    deadline: "15/04/2024",
-    priority: "high" as const,
-    status: "active" as const,
-  },
-  {
-    id: 3,
-    name: "Hệ thống CRM",
-    description:
-      "Xây dựng hệ thống quản lý khách hàng với tính năng theo dõi leads, quản lý pipeline và báo cáo doanh số.",
-    collaborators: [
-      { id: 8, name: "Lê Thị H", avatar: "/diverse-user-avatar-set-2.png", role: "Full-stack Developer" },
-      { id: 9, name: "Phạm Văn I", avatar: "/user-avatar-1.png", role: "Business Analyst" },
-    ],
-    activeTasks: 8,
-    completedTasks: 35,
-    progress: 85,
-    deadline: "20/02/2024",
-    priority: "medium" as const,
-    status: "active" as const,
-  },
-  {
-    id: 4,
-    name: "Website Portfolio",
-    description: "Thiết kế và phát triển website portfolio cho công ty, showcase các dự án và dịch vụ.",
-    collaborators: [
-      { id: 10, name: "Nguyễn Thị J", avatar: "/diverse-user-avatars-3.png", role: "Designer" },
-      { id: 11, name: "Trần Văn K", avatar: "/user-avatar-4.png", role: "Frontend Developer" },
-    ],
-    activeTasks: 3,
-    completedTasks: 18,
-    progress: 95,
-    deadline: "10/02/2024",
-    priority: "low" as const,
-    status: "completed" as const,
-  },
-]
-
-export default function ProjectsPage() {
-  const [projects, setProjects] = useState(initialProjects)
+export default function TeamsPage() {
+  const [teams, setTeams] = useState<Team[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [priorityFilter, setPriorityFilter] = useState("all")
-  const [createProjectOpen, setCreateProjectOpen] = useState(false)
+  const [filterVisibility, setFilterVisibility] = useState<string>("all")
+  const [editTeam, setEditTeam] = useState<Team | null>(null)
 
-  const handleCreateProject = (newProject: any) => {
-    setProjects([newProject, ...projects])
+  const loadTeams = async () => {
+    try {
+      setLoading(true)
+      console.log("Loading teams...")
+      const response = await teamApi.getMyTeams()
+
+      console.log("Teams response:", response)
+      console.log("Teams data:", response.teams)
+      setTeams(response.teams || [])
+    } catch (error: any) {
+      console.error("Error loading teams:", error)
+      toast.error(error.message || "Không thể tải danh sách nhóm")
+      setTeams([]) // Set empty array on error
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleEditProject = (project: any) => {
-    console.log("Edit project:", project)
+  useEffect(() => {
+    loadTeams()
+  }, [])
+
+  const handleCreateTeam = (newTeam: Team) => {
+    setTeams(prevTeams => [newTeam, ...prevTeams])
   }
 
-  const handleDeleteProject = (projectId: number) => {
-    setProjects(projects.filter((project) => project.id !== projectId))
+  const handleEditTeam = (team: Team) => {
+    setEditTeam(team)
   }
 
-  const filteredProjects = projects.filter((project) => {
-    const matchesSearch =
-      project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || project.status === statusFilter
-    const matchesPriority = priorityFilter === "all" || project.priority === priorityFilter
-    return matchesSearch && matchesStatus && matchesPriority
+  const handleDeleteTeam = async (teamId: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn xóa nhóm này?")) {
+      return
+    }
+    try {
+      await teamApi.deleteTeam(teamId)
+      setTeams(prevTeams => prevTeams.filter(team => team._id !== teamId))
+      toast.success("Nhóm đã được xóa thành công")
+    } catch (error: any) {
+      console.error("Error deleting team:", error)
+      toast.error(error.response?.data?.message || "Không thể xóa nhóm")
+    }
+  }
+
+  const handleInviteMember = (team: Team) => {
+    // TODO: Implement invite member functionality
+    toast.info(`Mời thành viên vào nhóm: ${team.name}`)
+  }
+
+  const filteredTeams = teams.filter(team => {
+    if (!team || !team.name) return false
+
+    const matchesSearch = team.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      team.description?.toLowerCase().includes(searchTerm.toLowerCase())
+
+    const matchesVisibility = filterVisibility === "all" ||
+      team.settings?.visibility === filterVisibility
+
+    return matchesSearch && matchesVisibility
   })
 
+  console.log("Teams state:", teams)
+  console.log("Filtered teams:", filteredTeams)
+  console.log("Loading state:", loading)
+
+  console.log(filteredTeams)
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-balance">Dự án nhóm</h1>
-          <p className="text-muted-foreground">Quản lý các dự án cộng tác và theo dõi tiến độ</p>
+          <h1 className="text-3xl font-bold text-balance">Quản lý nhóm</h1>
+          <p className="text-muted-foreground">Tạo và quản lý các nhóm làm việc của bạn</p>
         </div>
-        <Button onClick={() => setCreateProjectOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Tạo dự án mới
-        </Button>
+        <CreateTeamDialog onCreateTeam={handleCreateTeam} />
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-4">
+      <div className="flex items-center space-x-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
           <Input
-            placeholder="Tìm kiếm dự án..."
+            placeholder="Tìm kiếm nhóm..."
+            className="pl-10"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
           />
         </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
+        <Select value={filterVisibility} onValueChange={setFilterVisibility}>
           <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Trạng thái" />
+            <Filter className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="Lọc theo hiển thị" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">Tất cả</SelectItem>
-            <SelectItem value="active">Đang thực hiện</SelectItem>
-            <SelectItem value="completed">Hoàn thành</SelectItem>
-            <SelectItem value="paused">Tạm dừng</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Độ ưu tiên" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Tất cả</SelectItem>
-            <SelectItem value="high">Cao</SelectItem>
-            <SelectItem value="medium">Trung bình</SelectItem>
-            <SelectItem value="low">Thấp</SelectItem>
+            <SelectItem value="public">Công khai</SelectItem>
+            <SelectItem value="private">Riêng tư</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {filteredProjects.map((project) => (
-          <TeamCard key={project.id} team={project} onEdit={handleEditProject} onDelete={handleDeleteProject} />
-        ))}
-      </div>
-
-      {filteredProjects.length === 0 && (
-        <div className="text-center py-12">
-          <div className="text-muted-foreground">
-            {searchTerm || statusFilter !== "all" || priorityFilter !== "all"
-              ? "Không tìm thấy dự án nào phù hợp"
-              : "Chưa có dự án nào"}
-          </div>
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <TeamCardSkeleton key={i} />
+          ))}
+        </div>
+      ) : filteredTeams.length === 0 ? (
+        <div className="text-center text-muted-foreground py-10">
+          <p>Không tìm thấy nhóm nào.</p>
+          <p>Hãy tạo nhóm đầu tiên của bạn!</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {filteredTeams.map((team) => (
+            <TeamCard
+              key={team._id}
+              team={team}
+              onEdit={handleEditTeam}
+              onDelete={handleDeleteTeam}
+              onInvite={handleInviteMember}
+            />
+          ))}
         </div>
       )}
 
-      <CreateTeamDialog
-        open={createProjectOpen}
-        onOpenChange={setCreateProjectOpen}
-        onCreateTeam={handleCreateProject}
-      />
+      {editTeam && (
+        <EditTeamDialog
+          team={editTeam}
+          open={Boolean(editTeam)}
+          onOpenChange={(o) => { if (!o) setEditTeam(null) }}
+          onUpdated={(updated) => {
+            setTeams(prev => prev.map(t => t._id === updated._id ? updated : t))
+            setEditTeam(null)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function TeamCardSkeleton() {
+  return (
+    <div className="border rounded-lg p-6 animate-pulse">
+      <div className="flex items-center space-x-3 mb-4">
+        <div className="h-9 w-9 rounded-full bg-muted" />
+        <div className="h-5 w-32 bg-muted rounded" />
+      </div>
+      <div className="space-y-2 mb-4">
+        <div className="h-4 w-full bg-muted rounded" />
+        <div className="h-4 w-3/4 bg-muted rounded" />
+      </div>
+      <div className="space-y-2">
+        <div className="h-4 w-2/3 bg-muted rounded" />
+        <div className="h-4 w-1/2 bg-muted rounded" />
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 "use client"
 
-import { Bell, Search, User } from "lucide-react"
+import { Bell, Search, User, Users } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useRouter } from "next/navigation"
@@ -9,6 +9,7 @@ import { postJson } from "@/lib/api"
 import * as DM from "@radix-ui/react-dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { useAuth } from "@/contexts/AuthContext"
+import { NotificationCenter } from "@/components/notifications/notification-center"
 
 export function Header() {
   const router = useRouter()
@@ -23,12 +24,7 @@ export function Header() {
       </div>
 
       <div className="flex items-center space-x-4">
-        <Button variant="ghost" size="sm" className="relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute -top-1 -right-1 w-3 h-3 bg-destructive rounded-full text-xs flex items-center justify-center text-white">
-            3
-          </span>
-        </Button>
+        <NotificationCenter />
 
         <DM.Root>
           <DM.Trigger asChild>
@@ -51,6 +47,13 @@ export function Header() {
               <DM.Item className="relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent">
                 <User className="mr-2 h-4 w-4" />
                 <span>Hồ sơ cá nhân</span>
+              </DM.Item>
+              <DM.Item
+                className="relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent"
+                onClick={() => router.push('/invites')}
+              >
+                <Users className="mr-2 h-4 w-4" />
+                <span>Lời mời tham gia</span>
               </DM.Item>
               <DM.Item className="relative flex cursor-pointer select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent">
                 <span>Cài đặt</span>

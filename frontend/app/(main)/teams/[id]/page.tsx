@@ -1,273 +1,378 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { InviteMemberDialog } from "@/components/teams/invite-member-dialog"
+import { TaskFilters } from "@/components/tasks/task-filters"
 import { TaskCard } from "@/components/tasks/task-card"
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog"
-import { EditTaskDialog } from "@/components/tasks/edit-task-dialog"
-import { ArrowLeft, Calendar, Settings, Plus, Clock, Target, CheckCircle2, AlertCircle } from "lucide-react"
-import Link from "next/link"
+import { taskApi } from "@/lib/task-api"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { LayoutGrid, List } from "lucide-react"
+import { teamApi, Team } from "@/lib/team-api"
+import { toast } from "sonner"
+import { ArrowLeft, Settings, UserPlus, Users, Calendar, Shield } from "lucide-react"
+import { formatDistanceToNow } from "date-fns"
+import { vi } from "date-fns/locale"
 
-const mockProject = {
-  id: 1,
-  name: "Website Thương mại điện tử",
-  description:
-    "Dự án phát triển website bán hàng online với đầy đủ tính năng thanh toán, quản lý đơn hàng và tích hợp với các hệ thống vận chuyển.",
-  status: "active" as const,
-  priority: "high" as const,
-  deadline: "30/03/2024",
-  activeTasks: 15,
-  completedTasks: 42,
-  progress: 75,
-  createdDate: "15/12/2023",
-}
+export default function TeamDetailPage() {
+  const params = useParams()
+  const router = useRouter()
+  const teamId = params.id as string
 
-const mockProjectTasks = [
-  {
-    id: 1,
-    title: "Thiết kế giao diện trang chủ",
-    description: "Tạo mockup và prototype cho trang chủ website thương mại điện tử",
-    status: "in-progress" as const,
-    priority: "high" as const,
-    assignee: "Phạm Thị D",
-    dueDate: "25/01/2024",
-    avatar: "/user-avatar-4.png",
-    tags: ["UI/UX", "Frontend"],
-  },
-  {
-    id: 2,
-    title: "Phát triển API thanh toán",
-    description: "Tích hợp các cổng thanh toán VNPay, MoMo và ZaloPay",
-    status: "pending" as const,
-    priority: "high" as const,
-    assignee: "Lê Văn C",
-    dueDate: "30/01/2024",
-    avatar: "/diverse-user-avatars-3.png",
-    tags: ["Backend", "Payment"],
-  },
-  {
-    id: 3,
-    title: "Xây dựng trang sản phẩm",
-    description: "Phát triển trang hiển thị chi tiết sản phẩm với gallery và reviews",
-    status: "completed" as const,
-    priority: "medium" as const,
-    assignee: "Trần Thị B",
-    dueDate: "20/01/2024",
-    avatar: "/diverse-user-avatar-set-2.png",
-    tags: ["Frontend", "React"],
-  },
-  {
-    id: 4,
-    title: "Thiết lập hệ thống quản lý đơn hàng",
-    description: "Xây dựng dashboard quản lý đơn hàng cho admin",
-    status: "in-progress" as const,
-    priority: "medium" as const,
-    assignee: "Nguyễn Văn A",
-    dueDate: "05/02/2024",
-    avatar: "/user-avatar-1.png",
-    tags: ["Backend", "Admin"],
-  },
-  {
-    id: 5,
-    title: "Tối ưu hóa SEO",
-    description: "Cải thiện SEO cho tất cả các trang sản phẩm",
-    status: "pending" as const,
-    priority: "low" as const,
-    assignee: "Trần Thị B",
-    dueDate: "15/02/2024",
-    avatar: "/diverse-user-avatar-set-2.png",
-    tags: ["SEO", "Marketing"],
-  },
-  {
-    id: 6,
-    title: "Testing và QA",
-    description: "Kiểm tra toàn bộ hệ thống và sửa lỗi",
-    status: "pending" as const,
-    priority: "medium" as const,
-    assignee: "Lê Văn C",
-    dueDate: "20/02/2024",
-    avatar: "/diverse-user-avatars-3.png",
-    tags: ["Testing", "QA"],
-  },
-]
+  const [team, setTeam] = useState<Team | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [showInviteDialog, setShowInviteDialog] = useState(false)
+  const [tasks, setTasks] = useState<any[]>([])
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid")
+  const [activeTab, setActiveTab] = useState("all")
 
-const statusColors = {
-  active: "bg-blue-500/10 text-blue-500 border-blue-500/20",
-  completed: "bg-green-500/10 text-green-500 border-green-500/20",
-  paused: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-}
-
-const statusLabels = {
-  active: "Đang thực hiện",
-  completed: "Hoàn thành",
-  paused: "Tạm dừng",
-}
-
-const priorityColors = {
-  high: "bg-red-500/10 text-red-500 border-red-500/20",
-  medium: "bg-yellow-500/10 text-yellow-500 border-yellow-500/20",
-  low: "bg-green-500/10 text-green-500 border-green-500/20",
-}
-
-const priorityLabels = {
-  high: "Cao",
-  medium: "Trung bình",
-  low: "Thấp",
-}
-
-export default function ProjectDetailPage({ params }: { params: { id: string } }) {
-  const [project] = useState(mockProject)
-  const [tasks, setTasks] = useState(mockProjectTasks)
-  const [editingTask, setEditingTask] = useState<any>(null)
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-
-  const handleEditTask = (task: any) => {
-    setEditingTask(task)
-    setIsEditDialogOpen(true)
+  const loadTeam = async () => {
+    try {
+      setLoading(true)
+      const teamData = await teamApi.getTeamById(teamId)
+      setTeam(teamData)
+    } catch (error: any) {
+      console.error("Error loading team:", error)
+      toast.error("Không thể tải thông tin nhóm")
+      router.push("/teams")
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleSaveTask = (updatedTask: any) => {
-    setTasks(tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task)))
-    setEditingTask(null)
+  useEffect(() => {
+    if (teamId) {
+      loadTeam()
+    }
+  }, [teamId])
+
+  const handleMemberInvited = () => {
+    loadTeam()
   }
 
-  const handleDeleteTask = (taskId: number) => {
-    setTasks(tasks.filter((task) => task.id !== taskId))
+  const loadTasks = async () => {
+    if (!teamId) return
+    try {
+      const result = await taskApi.listTeamTasks(teamId)
+      const list = result.tasks || []
+      setTasks(
+        list.map((t: any) => ({
+          id: t._id,
+          title: t.title,
+          description: t.description,
+          status: t.status,
+          priority: t.priority,
+          assignee: t.assignee?.name || 'Chưa phân công',
+          dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'Chưa có hạn',
+          avatar: t.assignee?.avatar?.url,
+          tags: t.tags || [],
+          type: 'team' as const,
+          team: team ? { id: team._id, name: team.name, avatar: team.avatarUrl } : undefined,
+        }))
+      )
+    } catch (e) {
+      console.error('Load team tasks failed:', e)
+    }
   }
 
-  const handleAddTask = () => {
-    setIsCreateDialogOpen(true)
+  useEffect(() => {
+    loadTasks()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId])
+
+  const handleCreateTask = async (newTask: any) => {
+    try {
+      const payload = {
+        title: newTask.title,
+        description: newTask.description,
+        status: newTask.status,
+        priority: newTask.priority,
+        tags: newTask.tags,
+        dueDate: new Date(),
+      }
+      await taskApi.createTeamTask(teamId, payload)
+      await loadTasks()
+    } catch (e) {
+      console.error('Create task failed:', e)
+    }
   }
 
-  const handleCreateTask = (newTask: any) => {
-    const taskWithId = { ...newTask, id: Date.now() }
-    setTasks([taskWithId, ...tasks])
+  const handleEditTask = async (updated: any) => {
+    try {
+      await taskApi.updateTask(updated.id, updated)
+      await loadTasks()
+    } catch (e) {
+      console.error('Update task failed:', e)
+    }
   }
 
-  const completedTasksCount = tasks.filter((task) => task.status === "completed").length
-  const inProgressTasksCount = tasks.filter((task) => task.status === "in-progress").length
-  const pendingTasksCount = tasks.filter((task) => task.status === "pending").length
+  const handleDeleteTask = async (taskId: string | number) => {
+    try {
+      await taskApi.deleteTask(String(taskId))
+      await loadTasks()
+    } catch (e) {
+      console.error('Delete task failed:', e)
+    }
+  }
+
+  const handleFilterChange = (filters: any) => {
+    // placeholder for future backend filters
+    console.log('Team task filters:', filters)
+  }
+
+  const getTasksByStatus = (status: string) => tasks.filter((t) => t.status === status)
+
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'owner':
+        return 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
+      case 'admin':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300'
+      case 'member':
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+      default:
+        return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+    }
+  }
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'owner':
+        return 'Chủ sở hữu'
+      case 'admin':
+        return 'Quản trị viên'
+      case 'member':
+        return 'Thành viên'
+      default:
+        return 'Thành viên'
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center space-x-4">
+          <div className="h-8 w-8 bg-muted animate-pulse rounded" />
+          <div className="h-8 w-48 bg-muted animate-pulse rounded" />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+          <div className="h-64 bg-muted animate-pulse rounded-lg" />
+          <div className="h-64 bg-muted animate-pulse rounded-lg" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!team) {
+    return (
+      <div className="text-center py-12">
+        <h3 className="text-lg font-semibold mb-2">Nhóm không tồn tại</h3>
+        <p className="text-muted-foreground mb-4">Nhóm bạn đang tìm kiếm không tồn tại hoặc đã bị xóa.</p>
+        <Button onClick={() => router.push("/teams")}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Quay lại danh sách nhóm
+        </Button>
+      </div>
+    )
+  }
+
+  const activeMembers = team.members?.filter(member => member.status === 'active') || []
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="space-y-2">
-          <Link href="/teams">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Quay lại danh sách
-            </Button>
-          </Link>
-          <div className="flex items-center space-x-4">
-            <h1 className="text-3xl font-bold text-balance">{project.name}</h1>
-            <div className="flex items-center space-x-2">
-              <Badge variant="outline" className={statusColors[project.status]}>
-                {statusLabels[project.status]}
-              </Badge>
-              <Badge variant="outline" className={priorityColors[project.priority]}>
-                {priorityLabels[project.priority]}
-              </Badge>
-            </div>
-          </div>
-          <p className="text-muted-foreground">{project.description}</p>
-        </div>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={handleAddTask}>
-            <Plus className="mr-2 h-4 w-4" />
-            Thêm công việc
+        <div className="flex items-center space-x-4">
+          <Button variant="ghost" size="sm" onClick={() => router.push("/teams")}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Quay lại
           </Button>
+          <div>
+            <h1 className="text-3xl font-bold">{team.name || 'Tên nhóm'}</h1>
+            <p className="text-muted-foreground">{team.description || "Không có mô tả"}</p>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          {team && (
+            <InviteMemberDialog
+              team={team}
+              onMemberInvited={handleMemberInvited}
+            />
+          )}
           <Button variant="outline">
             <Settings className="mr-2 h-4 w-4" />
-            Cài đặt dự án
+            Cài đặt
           </Button>
         </div>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-4">
+      <div className="grid gap-6 md:grid-cols-2">
+        {/* Team Info */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tổng công việc</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Shield className="h-5 w-5" />
+              <span>Thông tin nhóm</span>
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{tasks.length}</div>
-            <p className="text-xs text-muted-foreground">{completedTasksCount} đã hoàn thành</p>
+          <CardContent className="space-y-4">
+            <div className="flex items-center space-x-3">
+              <Avatar className="h-12 w-12">
+                <AvatarImage src={team.avatarUrl} alt={team.name || 'Team'} />
+                <AvatarFallback>
+                  {team.name?.charAt(0)?.toUpperCase() || 'T'}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <h3 className="font-semibold">{team.name || 'Tên nhóm'}</h3>
+                <p className="text-sm text-muted-foreground">
+                  Tạo bởi {team.owner?.name || 'Người dùng'}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Quyền riêng tư</span>
+                <Badge variant="outline" className={getRoleBadgeColor('owner')}>
+                  {team.settings?.visibility === 'public' ? 'Công khai' : 'Riêng tư'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Tự tham gia</span>
+                <Badge variant="outline">
+                  {team.settings?.allowSelfJoin ? 'Cho phép' : 'Không cho phép'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Ngày tạo</span>
+                <span className="text-sm">
+                  {team.createdAt ? formatDistanceToNow(new Date(team.createdAt), {
+                    addSuffix: true,
+                    locale: vi
+                  }) : 'Không xác định'}
+                </span>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
+        {/* Members */}
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Đang thực hiện</CardTitle>
-            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <Users className="h-5 w-5" />
+              <span>Thành viên ({activeMembers.length})</span>
+            </CardTitle>
+            <CardDescription>
+              Danh sách các thành viên trong nhóm
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-500">{inProgressTasksCount}</div>
-            <p className="text-xs text-muted-foreground">{pendingTasksCount} chờ xử lý</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tiến độ dự án</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{project.progress}%</div>
-            <Progress value={project.progress} className="mt-2 h-2" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Deadline</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-500">{project.deadline}</div>
-            <p className="text-xs text-muted-foreground">Còn 45 ngày</p>
+            <div className="space-y-3">
+              {activeMembers.map((member) => (
+                <div key={member.user._id} className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={member.user.avatarUrl} alt={member.user.name} />
+                      <AvatarFallback>
+                        {member.user.name.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="text-sm font-medium">{member.user.name}</p>
+                      <p className="text-xs text-muted-foreground">{member.user.email}</p>
+                    </div>
+                  </div>
+                  <Badge className={getRoleBadgeColor(member.role)}>
+                    {getRoleLabel(member.role)}
+                  </Badge>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Danh sách công việc</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {tasks.map((task) => (
-              <TaskCard key={task.id} task={task} onEdit={handleEditTask} onDelete={handleDeleteTask} />
-            ))}
+      {/* Team Tasks */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Công việc của nhóm</h2>
+            <p className="text-muted-foreground">Quản lý và theo dõi công việc trong nhóm</p>
           </div>
-          {tasks.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <CheckCircle2 className="mx-auto h-12 w-12 mb-4 opacity-50" />
-              <p>Chưa có công việc nào trong dự án này</p>
-              <Button onClick={handleAddTask} className="mt-4">
-                <Plus className="mr-2 h-4 w-4" />
-                Tạo công việc đầu tiên
+          <div className="flex items-center space-x-2">
+            <div className="flex items-center border border-border rounded-lg p-1">
+              <Button
+                variant={viewMode === "grid" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("grid")}
+                className="h-8 w-8 p-0"
+              >
+                <LayoutGrid className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === "list" ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setViewMode("list")}
+                className="h-8 w-8 p-0"
+              >
+                <List className="h-4 w-4" />
               </Button>
             </div>
-          )}
-        </CardContent>
-      </Card>
+            <CreateTaskDialog onCreateTask={handleCreateTask} />
+          </div>
+        </div>
 
-      <CreateTaskDialog
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-        onCreateTask={handleCreateTask}
-      />
+        <TaskFilters onFilterChange={handleFilterChange} />
 
-      <EditTaskDialog
-        task={editingTask}
-        open={isEditDialogOpen}
-        onOpenChange={setIsEditDialogOpen}
-        onSave={handleSaveTask}
-      />
+        <Tabs defaultValue="all" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="all">Tất cả ({tasks.length})</TabsTrigger>
+            <TabsTrigger value="pending">Chờ xử lý ({getTasksByStatus("pending").length})</TabsTrigger>
+            <TabsTrigger value="in-progress">Đang thực hiện ({getTasksByStatus("in-progress").length})</TabsTrigger>
+            <TabsTrigger value="completed">Hoàn thành ({getTasksByStatus("completed").length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="all" className="space-y-4">
+            <div className={viewMode === "grid" ? "grid gap-4 md:grid-cols-2 lg:grid-cols-3" : "space-y-4"}>
+              {tasks.map((task) => (
+                <TaskCard key={task.id} task={task} onEdit={handleEditTask} onDelete={handleDeleteTask} />
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="pending" className="space-y-4">
+            <div className={viewMode === "grid" ? "grid gap-4 md:grid-cols-2 lg:grid-cols-3" : "space-y-4"}>
+              {getTasksByStatus("pending").map((task) => (
+                <TaskCard key={task.id} task={task} onEdit={handleEditTask} onDelete={handleDeleteTask} />
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="in-progress" className="space-y-4">
+            <div className={viewMode === "grid" ? "grid gap-4 md:grid-cols-2 lg:grid-cols-3" : "space-y-4"}>
+              {getTasksByStatus("in-progress").map((task) => (
+                <TaskCard key={task.id} task={task} onEdit={handleEditTask} onDelete={handleDeleteTask} />
+              ))}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="completed" className="space-y-4">
+            <div className={viewMode === "grid" ? "grid gap-4 md:grid-cols-2 lg:grid-cols-3" : "space-y-4"}>
+              {getTasksByStatus("completed").map((task) => (
+                <TaskCard key={task.id} task={task} onEdit={handleEditTask} onDelete={handleDeleteTask} />
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
+      </div>
+
     </div>
   )
 }

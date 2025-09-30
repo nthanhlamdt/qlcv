@@ -26,7 +26,7 @@ export interface NotificationFilters {
 }
 
 // Tạo thông báo mới
-export const createNotification = CatchAsyncError(async (data: CreateNotificationData) => {
+export const createNotification = async (data: CreateNotificationData) => {
   const { recipientId, senderId, type, title, message, data: notificationData } = data
 
   // Kiểm tra người nhận có tồn tại không
@@ -53,10 +53,10 @@ export const createNotification = CatchAsyncError(async (data: CreateNotificatio
   })
 
   return notification
-})
+}
 
 // Lấy danh sách thông báo của user
-export const getNotifications = CatchAsyncError(async (filters: NotificationFilters) => {
+export const getNotifications = async (filters: NotificationFilters) => {
   const { recipientId, type, isRead, limit = 20, page = 1 } = filters
 
   const query: any = { recipient: recipientId }
@@ -87,10 +87,10 @@ export const getNotifications = CatchAsyncError(async (filters: NotificationFilt
       total,
     },
   }
-})
+}
 
 // Đánh dấu thông báo đã đọc
-export const markAsRead = CatchAsyncError(async (notificationId: string, userId: string) => {
+export const markAsRead = async (notificationId: string, userId: string) => {
   const notification = await NotificationModel.findOne({
     _id: notificationId,
     recipient: userId,
@@ -105,20 +105,20 @@ export const markAsRead = CatchAsyncError(async (notificationId: string, userId:
   await notification.save()
 
   return notification
-})
+}
 
 // Đánh dấu tất cả thông báo đã đọc
-export const markAllAsRead = CatchAsyncError(async (userId: string) => {
+export const markAllAsRead = async (userId: string) => {
   const result = await NotificationModel.updateMany(
     { recipient: userId, isRead: false },
     { isRead: true, readAt: new Date() }
   )
 
   return result
-})
+}
 
 // Xóa thông báo
-export const deleteNotification = CatchAsyncError(async (notificationId: string, userId: string) => {
+export const deleteNotification = async (notificationId: string, userId: string) => {
   const notification = await NotificationModel.findOneAndDelete({
     _id: notificationId,
     recipient: userId,
@@ -129,20 +129,20 @@ export const deleteNotification = CatchAsyncError(async (notificationId: string,
   }
 
   return notification
-})
+}
 
 // Đếm số thông báo chưa đọc
-export const getUnreadCount = CatchAsyncError(async (userId: string) => {
+export const getUnreadCount = async (userId: string) => {
   const count = await NotificationModel.countDocuments({
     recipient: userId,
     isRead: false,
   })
 
   return count
-})
+}
 
 // Tạo thông báo cho nhiều người (broadcast)
-export const createBroadcastNotification = CatchAsyncError(async (
+export const createBroadcastNotification = async (
   recipientIds: string[],
   type: 'task_assigned' | 'task_completed' | 'task_updated' | 'team_invite' | 'system' | 'mention',
   title: string,
@@ -161,10 +161,10 @@ export const createBroadcastNotification = CatchAsyncError(async (
 
   const createdNotifications = await NotificationModel.insertMany(notifications)
   return createdNotifications
-})
+}
 
 // Tạo thông báo cho team
-export const createTeamNotification = CatchAsyncError(async (
+export const createTeamNotification = async (
   teamId: string,
   type: 'task_assigned' | 'task_completed' | 'task_updated' | 'team_invite' | 'system' | 'mention',
   title: string,
@@ -179,4 +179,4 @@ export const createTeamNotification = CatchAsyncError(async (
 
   // Tạm thời return empty array cho đến khi có Team model
   return []
-})
+}

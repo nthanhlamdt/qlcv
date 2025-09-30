@@ -1,7 +1,6 @@
 "use client"
 
-import type React from "react"
-import { useState } from "react"
+import React, { useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -10,91 +9,85 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { CalendarIcon, Mail, Plus, X } from "lucide-react"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { format } from "date-fns"
-import { vi } from "date-fns/locale"
-import { cn } from "@/lib/utils"
-import { Badge } from "@/components/ui/badge"
+import { Switch } from "@/components/ui/switch"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Plus } from "lucide-react"
+import { teamApi, CreateTeamData, Team } from "@/lib/team-api"
+import { toast } from "sonner"
 
 interface CreateTeamDialogProps {
-  open: boolean
-  onOpenChange: (open: boolean) => void
-  onCreateTeam: (project: any) => void
+  onCreateTeam: (newTeam: Team) => void
 }
 
-export function CreateTeamDialog({ open, onOpenChange, onCreateTeam }: CreateTeamDialogProps) {
+export function CreateTeamDialog({ onCreateTeam }: CreateTeamDialogProps) {
+  const [open, setOpen] = useState(false)
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const [deadline, setDeadline] = useState<Date>()
-  const [inviteEmails, setInviteEmails] = useState<string[]>([])
-  const [currentEmail, setCurrentEmail] = useState("")
+  const [avatarUrl, setAvatarUrl] = useState("")
+  const [visibility, setVisibility] = useState<"public" | "private">("private")
+  const [allowSelfJoin, setAllowSelfJoin] = useState(false)
+  const [loading, setLoading] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    const newProject = {
-      id: Date.now(),
-      name,
-      description,
-      deadline: deadline ? format(deadline, "dd/MM/yyyy", { locale: vi }) : "",
-      inviteEmails: [...inviteEmails],
-      collaborators: [], // Will be populated when invites are accepted
-      activeTasks: 0,
-      completedTasks: 0,
-      progress: 0,
-    }
-
-    onCreateTeam(newProject)
-
-    // Reset form
-    setName("")
-    setDescription("")
-    setDeadline(undefined)
-    setInviteEmails([])
-    setCurrentEmail("")
-    onOpenChange(false)
-  }
-
-  const handleAddEmail = () => {
-    if (currentEmail && currentEmail.includes("@") && !inviteEmails.includes(currentEmail)) {
-      setInviteEmails([...inviteEmails, currentEmail])
-      setCurrentEmail("")
-    }
-  }
-
-  const handleRemoveEmail = (email: string) => {
-    setInviteEmails(inviteEmails.filter((e) => e !== email))
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault()
-      handleAddEmail()
+    setLoading(true)
+    try {
+      const newTeamData: CreateTeamData = {
+        name,
+        description,
+        avatarUrl,
+        settings: {
+          visibility,
+          allowSelfJoin,
+        },
+      }
+      const newTeam = await teamApi.createTeam(newTeamData)
+      onCreateTeam(newTeam)
+      toast.success("Nhóm đã được tạo thành công!")
+      setOpen(false)
+      // Reset form
+      setName("")
+      setDescription("")
+      setAvatarUrl("")
+      setVisibility("private")
+      setAllowSelfJoin(false)
+    } catch (error: any) {
+      console.error("Error creating team:", error)
+      toast.error(error.message || "Không thể tạo nhóm")
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[525px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button type="button">
+          <Plus className="mr-2 h-4 w-4" />
+          Tạo nhóm mới
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
-          <DialogTitle>Tạo dự án mới</DialogTitle>
-          <DialogDescription>Tạo dự án cộng tác mới và mời cộng tác viên qua email.</DialogDescription>
+          <DialogTitle>Tạo nhóm mới</DialogTitle>
+          <DialogDescription>
+            Điền thông tin để tạo nhóm mới cho dự án của bạn.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit}>
           <div className="grid gap-4 py-4">
             <div className="grid gap-2">
-              <Label htmlFor="name">Tên dự án</Label>
+              <Label htmlFor="name">Tên nhóm</Label>
               <Input
                 id="name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Nhập tên dự án..."
+                placeholder="Nhập tên nhóm..."
                 required
               />
             </div>
@@ -105,74 +98,52 @@ export function CreateTeamDialog({ open, onOpenChange, onCreateTeam }: CreateTea
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Mô tả về dự án và mục tiêu..."
+                placeholder="Mô tả chi tiết về nhóm..."
                 rows={3}
               />
             </div>
 
             <div className="grid gap-2">
-              <Label>Deadline</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn("w-full justify-start text-left font-normal", !deadline && "text-muted-foreground")}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {deadline ? format(deadline, "dd/MM/yyyy", { locale: vi }) : "Chọn ngày deadline"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={deadline} onSelect={setDeadline} initialFocus />
-                </PopoverContent>
-              </Popover>
+              <Label htmlFor="avatarUrl">URL Avatar (tùy chọn)</Label>
+              <Input
+                id="avatarUrl"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                placeholder="https://example.com/avatar.png"
+              />
             </div>
 
-            <div className="grid gap-2">
-              <Label>Mời cộng tác viên</Label>
-              <div className="space-y-2">
-                <div className="flex gap-2">
-                  <Input
-                    value={currentEmail}
-                    onChange={(e) => setCurrentEmail(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    placeholder="Nhập email cộng tác viên..."
-                    type="email"
-                  />
-                  <Button type="button" onClick={handleAddEmail} size="sm">
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Hiển thị</Label>
+                <Select value={visibility} onValueChange={(value: "public" | "private") => setVisibility(value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Chọn chế độ hiển thị" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="private">Riêng tư (Chỉ thành viên)</SelectItem>
+                    <SelectItem value="public">Công khai (Mọi người có thể xem)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                {inviteEmails.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {inviteEmails.map((email) => (
-                      <Badge key={email} variant="secondary" className="flex items-center gap-1">
-                        <Mail className="h-3 w-3" />
-                        {email}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="h-4 w-4 p-0 hover:bg-transparent"
-                          onClick={() => handleRemoveEmail(email)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <p className="text-xs text-muted-foreground">Lời mời sẽ được gửi qua email đến các cộng tác viên</p>
+              <div className="flex items-center space-x-2 pt-8">
+                <Switch
+                  id="allowSelfJoin"
+                  checked={allowSelfJoin}
+                  onCheckedChange={setAllowSelfJoin}
+                />
+                <Label htmlFor="allowSelfJoin">Cho phép tự tham gia</Label>
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
               Hủy
             </Button>
-            <Button type="submit">Tạo dự án</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Đang tạo..." : "Tạo nhóm"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

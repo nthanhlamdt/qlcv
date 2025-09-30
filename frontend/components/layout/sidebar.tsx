@@ -15,6 +15,7 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
+  Mail,
 } from "lucide-react"
 
 const navigation = [
@@ -23,6 +24,7 @@ const navigation = [
   { name: "Lịch làm việc", href: "/calendar", icon: Calendar },
   { name: "Thống kê", href: "/analytics", icon: BarChart3 },
   { name: "Dự án nhóm", href: "/teams", icon: Users },
+  { name: "Lời mời", href: "/invites", icon: Mail },
   { name: "Hồ sơ cá nhân", href: "/profile", icon: User },
 ]
 

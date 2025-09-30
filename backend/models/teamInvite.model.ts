@@ -79,14 +79,13 @@ teamInviteSchema.index({ status: 1 })
 teamInviteSchema.index({ expiresAt: 1 })
 
 // Index để tìm lời mời chưa hết hạn
-teamInviteSchema.index({
-  inviteeEmail: 1,
-  status: 'pending',
-  expiresAt: { $gt: new Date() }
-})
+teamInviteSchema.index(
+  { inviteeEmail: 1, status: 1, expiresAt: 1 },
+  { name: 'pending_not_expired_idx' }
+)
 
-// Pre-save middleware để tạo token
-teamInviteSchema.pre('save', function (next) {
+// Pre-validate middleware để tạo token trước khi validate
+teamInviteSchema.pre('validate', function (next) {
   if (this.isNew && !this.token) {
     // Tạo token ngẫu nhiên
     this.token = require('crypto').randomBytes(32).toString('hex')
