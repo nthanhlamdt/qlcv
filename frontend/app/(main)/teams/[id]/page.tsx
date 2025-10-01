@@ -94,12 +94,14 @@ export default function TeamDetailPage() {
         assignee: Array.isArray(t.assignees) && t.assignees.length > 0
           ? t.assignees.map((u: any) => u?.name).filter(Boolean).join(', ')
           : 'Chưa phân công',
+        assignees: t.assignees || [], // Lưu array assignees để kiểm tra quyền
         dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'Chưa có hạn',
         avatar: undefined,
         tags: t.tags || [],
         type: 'team' as const,
         team: undefined, // Không hiển thị team info khi đang ở trong team detail
         position: t.position, // Lưu position từ database
+        visibility: t.visibility || 'public', // Lưu visibility từ database
       }))
 
       setTasks(mappedTasks)
@@ -141,7 +143,9 @@ export default function TeamDetailPage() {
         tags: newTask.tags,
         dueDate: newTask.dueDate,
         assignees: newTask.assignees || [],
+        visibility: newTask.visibility || 'public', // Thêm visibility
       }
+      console.log('Creating task with payload:', payload)
       await taskApi.createTeamTask(teamId, payload)
       await loadTasks()
     } catch (e: any) {
@@ -589,7 +593,14 @@ export default function TeamDetailPage() {
                               WebkitUserSelect: 'none'
                             }}
                           >
-                            <TaskCard task={task} onEdit={handleEditTask} onDelete={handleDeleteTask} hideTeamLink={true} />
+                            <TaskCard
+                              task={task}
+                              onEdit={handleEditTask}
+                              onDelete={handleDeleteTask}
+                              hideTeamLink={true}
+                              currentUserId={user?._id}
+                              isTeamOwner={isOwner}
+                            />
                           </div>
                           {isOwner && (
                             <div

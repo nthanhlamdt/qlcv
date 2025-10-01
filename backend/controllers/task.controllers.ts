@@ -5,9 +5,11 @@ import mongoose from 'mongoose'
 
 export const getTeamTasks = CatchAsyncError(async (req: Request, res: Response) => {
   const teamId = req.params.teamId
+  const userId = (req as any).user?.id
   const { status, priority, assignee, search, page, limit } = req.query
   const result = await listTeamTasks({
     teamId,
+    userId,
     status: status as string,
     priority: priority as string,
     assignee: assignee as string,

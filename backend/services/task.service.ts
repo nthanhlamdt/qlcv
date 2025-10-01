@@ -10,16 +10,31 @@ export interface ListTeamTasksParams {
   search?: string
   page?: number
   limit?: number
+  userId?: string // User ID để filter visibility
 }
 
 export async function listTeamTasks(params: ListTeamTasksParams) {
-  const { teamId, status, priority, assignee, search, page = 1, limit = 20 } = params
+  const { teamId, status, priority, assignee, search, page = 1, limit = 20, userId } = params
 
   const query: FilterQuery<ITask> = { team: teamId }
   if (status && status !== 'all') query.status = status as any
   if (priority && priority !== 'all') query.priority = priority as any
   if (assignee && assignee !== 'all') (query as any).assignees = assignee
   if (search) (query as any).title = { $regex: search, $options: 'i' }
+
+  // Filter by visibility: public tasks or private tasks where user is owner/assignee
+  if (userId) {
+    query.$or = [
+      { visibility: 'public' },
+      {
+        visibility: 'private',
+        $or: [
+          { createdBy: userId },
+          { assignees: userId }
+        ]
+      }
+    ]
+  }
 
   const skip = (page - 1) * limit
   const [tasks, total] = await Promise.all([
@@ -66,7 +81,9 @@ export async function createPersonalTask(input: Partial<ITask> & { title: string
 }
 
 export async function createTask(input: Partial<ITask> & { team: string; title: string; createdBy: string }) {
+  console.log('Creating task with input:', input)
   const task = await TaskModel.create(input as any)
+  console.log('Created task:', task)
   return task
 }
 

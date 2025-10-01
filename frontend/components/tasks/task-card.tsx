@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Clock, MoreHorizontal, Edit, Trash2, Eye, User, Users } from "lucide-react"
+import { Clock, MoreHorizontal, Edit, Trash2, Eye, User, Users, Lock, Globe } from "lucide-react"
 import Link from "next/link"
 
 interface Task {
@@ -14,6 +14,7 @@ interface Task {
   status: "pending" | "in-progress" | "completed"
   priority: "high" | "medium" | "low"
   assignee: string
+  assignees?: string[] // Array of assignee IDs for permission checking
   dueDate: string
   avatar?: string
   tags: string[]
@@ -23,6 +24,7 @@ interface Task {
     avatar?: string
   }
   type: "personal" | "team"
+  visibility?: "public" | "private"
 }
 
 interface TaskCardProps {
@@ -30,6 +32,8 @@ interface TaskCardProps {
   onEdit: (task: Task) => void
   onDelete: (taskId: number) => void
   hideTeamLink?: boolean // Ẩn link "Xem nhóm" khi đang ở trong team detail
+  currentUserId?: string // ID của user hiện tại để kiểm tra quyền truy cập
+  isTeamOwner?: boolean // Có phải chủ nhóm không
 }
 
 const statusColors = {
@@ -56,7 +60,20 @@ const priorityLabels = {
   low: "Thấp",
 }
 
-export function TaskCard({ task, onEdit, onDelete, hideTeamLink = false }: TaskCardProps) {
+export function TaskCard({ task, onEdit, onDelete, hideTeamLink = false, currentUserId, isTeamOwner = false }: TaskCardProps) {
+  // Kiểm tra quyền truy cập cho task riêng tư
+  const canAccessTask = () => {
+    // Nếu không có visibility, coi như public (backward compatibility)
+    if (!task.visibility || task.visibility === 'public') return true
+    if (task.visibility === 'private') {
+      // Chỉ chủ nhóm hoặc người được phân công mới xem được
+      return isTeamOwner || (currentUserId && task.assignees?.includes(currentUserId))
+    }
+    return true
+  }
+
+  const hasAccess = canAccessTask()
+
   const frame: Record<string, { frame: string; accent: string; hover: string }> = {
     high: {
       frame: "border-red-300 bg-red-50/60 dark:border-red-900/60 dark:bg-red-950/40",
@@ -82,34 +99,42 @@ export function TaskCard({ task, onEdit, onDelete, hideTeamLink = false }: TaskC
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-semibold text-sm line-clamp-2">{task.title}</h3>
+              <h3 className="font-semibold text-sm line-clamp-2">
+                {hasAccess ? task.title : `${task.title} 🔒`}
+              </h3>
               {task.type === "team" && <Users className="h-3 w-3 text-blue-500 flex-shrink-0" />}
+              {task.visibility === "private" && <Lock className="h-3 w-3 text-orange-500 flex-shrink-0" />}
+              {(!task.visibility || task.visibility === "public") && <Globe className="h-3 w-3 text-green-500 flex-shrink-0" />}
             </div>
-            <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{task.description}</p>
+            <p className="text-xs text-muted-foreground line-clamp-2 mb-2">
+              {hasAccess ? task.description : "Bạn không có quyền xem nội dung công việc này"}
+            </p>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <MoreHorizontal className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem asChild>
-                <Link href={`/tasks/${task.id}`}>
-                  <Eye className="mr-2 h-4 w-4" />
-                  Xem chi tiết
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onEdit(task)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Chỉnh sửa
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onDelete(task.id)} className="text-destructive">
-                <Trash2 className="mr-2 h-4 w-4" />
-                Xóa
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {hasAccess && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <Link href={`/tasks/${task.id}`}>
+                    <Eye className="mr-2 h-4 w-4" />
+                    Xem chi tiết
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onEdit(task)}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Chỉnh sửa
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onDelete(task.id)} className="text-destructive">
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Xóa
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         <div className="flex items-center justify-between mb-3">
@@ -120,10 +145,15 @@ export function TaskCard({ task, onEdit, onDelete, hideTeamLink = false }: TaskC
             <Badge variant="outline" className={priorityColors[task.priority]}>
               {priorityLabels[task.priority]}
             </Badge>
+            {!hasAccess && task.visibility === "private" && (
+              <Badge variant="outline" className="bg-orange-100 text-orange-700 border-orange-300">
+                Riêng tư
+              </Badge>
+            )}
           </div>
         </div>
 
-        {task.type === "team" && task.team && (
+        {hasAccess && task.type === "team" && task.team && (
           <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
@@ -152,21 +182,29 @@ export function TaskCard({ task, onEdit, onDelete, hideTeamLink = false }: TaskC
                 <User className="h-3 w-3" />
               </AvatarFallback>
             </Avatar>
-            <span className="text-xs text-muted-foreground">{task.assignee}</span>
+            <span className="text-xs text-muted-foreground">
+              {hasAccess ? task.assignee : "***"}
+            </span>
           </div>
           <div className="flex items-center text-xs text-muted-foreground">
             <Clock className="h-3 w-3 mr-1" />
-            {task.dueDate}
+            {hasAccess ? task.dueDate : "***"}
           </div>
         </div>
 
         {task.tags.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-2">
-            {task.tags.map((tag, index) => (
-              <Badge key={index} variant="outline" className="text-xs">
-                {tag}
+            {hasAccess ? (
+              task.tags.map((tag, index) => (
+                <Badge key={index} variant="outline" className="text-xs">
+                  {tag}
+                </Badge>
+              ))
+            ) : (
+              <Badge variant="outline" className="text-xs bg-gray-100 text-gray-500">
+                ***
               </Badge>
-            ))}
+            )}
           </div>
         )}
       </CardContent>

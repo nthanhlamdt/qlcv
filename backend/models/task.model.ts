@@ -15,6 +15,17 @@ export interface ITask extends Document {
   tags: string[]
   createdBy: mongoose.Types.ObjectId
   position?: string // Column position for Kanban board
+  visibility: 'public' | 'private' // Public: tất cả xem được, Private: chỉ owner và assignees
+  attachments?: Array<{
+    _id?: mongoose.Types.ObjectId
+    filename: string
+    originalName: string
+    mimeType: string
+    size: number
+    url: string
+    uploadedBy: mongoose.Types.ObjectId
+    uploadedAt: Date
+  }>
   notes?: Array<{
     _id?: mongoose.Types.ObjectId
     content: string
@@ -36,6 +47,7 @@ const taskSchema = new Schema<ITask>(
     tags: { type: [String], default: [] },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     position: { type: String }, // Column position for Kanban board
+    visibility: { type: String, enum: ['public', 'private'], default: 'public' },
     notes: [
       {
         content: { type: String, required: true },

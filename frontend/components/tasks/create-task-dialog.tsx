@@ -37,6 +37,7 @@ export function CreateTaskDialog({ onCreateTask, members = [] }: CreateTaskDialo
   const [assignees, setAssignees] = useState<string[]>([])
   const [dueDate, setDueDate] = useState<Date>()
   const [tags, setTags] = useState("")
+  const [visibility, setVisibility] = useState("public")
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,6 +55,7 @@ export function CreateTaskDialog({ onCreateTask, members = [] }: CreateTaskDialo
         .split(",")
         .map((tag) => tag.trim())
         .filter(Boolean),
+      visibility: visibility as "public" | "private",
     }
 
     onCreateTask(newTask)
@@ -143,6 +145,19 @@ export function CreateTaskDialog({ onCreateTask, members = [] }: CreateTaskDialo
                     )
                   })}
                 </div>
+              </div>
+
+              <div className="grid gap-2">
+                <Label>Quyền xem</Label>
+                <Select value={visibility} onValueChange={setVisibility}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="public">Công khai - Tất cả thành viên xem được</SelectItem>
+                    <SelectItem value="private">Riêng tư - Chỉ chủ nhóm và người được phân công</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
