@@ -14,6 +14,7 @@ export interface ITask extends Document {
   dueDate?: Date
   tags: string[]
   createdBy: mongoose.Types.ObjectId
+  position?: string // Column position for Kanban board
   notes?: Array<{
     _id?: mongoose.Types.ObjectId
     content: string
@@ -34,6 +35,7 @@ const taskSchema = new Schema<ITask>(
     dueDate: { type: Date },
     tags: { type: [String], default: [] },
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+    position: { type: String }, // Column position for Kanban board
     notes: [
       {
         content: { type: String, required: true },

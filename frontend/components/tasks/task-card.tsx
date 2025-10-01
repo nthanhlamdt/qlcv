@@ -29,6 +29,7 @@ interface TaskCardProps {
   task: Task
   onEdit: (task: Task) => void
   onDelete: (taskId: number) => void
+  hideTeamLink?: boolean // Ẩn link "Xem nhóm" khi đang ở trong team detail
 }
 
 const statusColors = {
@@ -55,7 +56,7 @@ const priorityLabels = {
   low: "Thấp",
 }
 
-export function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
+export function TaskCard({ task, onEdit, onDelete, hideTeamLink = false }: TaskCardProps) {
   const frame: Record<string, { frame: string; accent: string; hover: string }> = {
     high: {
       frame: "border-red-300 bg-red-50/60 dark:border-red-900/60 dark:bg-red-950/40",
@@ -134,9 +135,11 @@ export function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
                 </Avatar>
                 <span className="text-xs font-medium text-blue-700">Nhóm: {task.team.name}</span>
               </div>
-              <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700">
-                <Link href={`/teams/${task.team.id}`}>Xem nhóm</Link>
-              </Button>
+              {!hideTeamLink && (
+                <Button asChild variant="ghost" size="sm" className="h-6 px-2 text-xs text-blue-600 hover:text-blue-700">
+                  <Link href={`/teams/${task.team.id}`}>Xem nhóm</Link>
+                </Button>
+              )}
             </div>
           </div>
         )}

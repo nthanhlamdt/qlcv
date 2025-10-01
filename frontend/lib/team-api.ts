@@ -26,6 +26,13 @@ export interface Team {
     visibility: 'public' | 'private'
     allowSelfJoin: boolean
   }
+  board?: {
+    columns: Array<{
+      key: string
+      title: string
+      order: number
+    }>
+  }
   createdAt: string
   updatedAt: string
 }

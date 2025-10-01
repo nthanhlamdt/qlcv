@@ -15,14 +15,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LayoutGrid, List } from "lucide-react"
 import { teamApi, Team } from "@/lib/team-api"
 import { toast } from "sonner"
-import { ArrowLeft, Settings, UserPlus, Users, Calendar, Shield } from "lucide-react"
+import { ArrowLeft, Settings, UserPlus, Users, Calendar, Shield, GripVertical } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { vi } from "date-fns/locale"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function TeamDetailPage() {
   const params = useParams()
   const router = useRouter()
   const teamId = params.id as string
+  const { user } = useAuth()
 
   const [team, setTeam] = useState<Team | null>(null)
   const [loading, setLoading] = useState(true)
@@ -38,15 +40,30 @@ export default function TeamDetailPage() {
     review: 'Chờ duyệt',
     completed: 'Hoàn thành',
   })
+  const [taskPositions, setTaskPositions] = useState<Record<string, string>>({})
 
   const loadTeam = async () => {
     try {
       setLoading(true)
       const teamData = await teamApi.getTeamById(teamId)
       setTeam(teamData)
+
+      // Load board columns from team data
+      if (teamData.board?.columns && Array.isArray(teamData.board.columns)) {
+        const sortedColumns = teamData.board.columns
+          .sort((a: any, b: any) => a.order - b.order)
+          .map((col: any) => col.key)
+        setColumns(sortedColumns)
+
+        const titles: Record<string, string> = {}
+        teamData.board.columns.forEach((col: any) => {
+          titles[col.key] = col.title
+        })
+        setColumnTitles(titles)
+      }
     } catch (error: any) {
       console.error("Error loading team:", error)
-      toast.error("Không thể tải thông tin nhóm")
+      toast.error(error?.message || "Không thể tải thông tin nhóm")
       router.push("/teams")
     } finally {
       setLoading(false)
@@ -68,25 +85,34 @@ export default function TeamDetailPage() {
     try {
       const result = await taskApi.listTeamTasks(teamId)
       const list = result.tasks || []
-      setTasks(
-        list.map((t: any) => ({
-          id: t._id,
-          title: t.title,
-          description: t.description,
-          status: t.status,
-          priority: t.priority,
-          assignee: Array.isArray(t.assignees) && t.assignees.length > 0
-            ? t.assignees.map((u: any) => u?.name).filter(Boolean).join(', ')
-            : 'Chưa phân công',
-          dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'Chưa có hạn',
-          avatar: undefined,
-          tags: t.tags || [],
-          type: 'team' as const,
-          team: team ? { id: team._id, name: team.name, avatar: team.avatarUrl } : undefined,
-        }))
-      )
-    } catch (e) {
+      const mappedTasks = list.map((t: any) => ({
+        id: t._id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        priority: t.priority,
+        assignee: Array.isArray(t.assignees) && t.assignees.length > 0
+          ? t.assignees.map((u: any) => u?.name).filter(Boolean).join(', ')
+          : 'Chưa phân công',
+        dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : 'Chưa có hạn',
+        avatar: undefined,
+        tags: t.tags || [],
+        type: 'team' as const,
+        team: undefined, // Không hiển thị team info khi đang ở trong team detail
+        position: t.position, // Lưu position từ database
+      }))
+
+      setTasks(mappedTasks)
+
+      // Khởi tạo vị trí ban đầu của task theo position hoặc status
+      const initialPositions: Record<string, string> = {}
+      mappedTasks.forEach((task: any) => {
+        initialPositions[task.id] = task.position || task.status
+      })
+      setTaskPositions(initialPositions)
+    } catch (e: any) {
       console.error('Load team tasks failed:', e)
+      toast.error(e?.message || 'Không thể tải danh sách công việc')
     }
   }
 
@@ -95,26 +121,15 @@ export default function TeamDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [teamId])
 
-  // Load/sync column order per team
-  useEffect(() => {
-    if (!teamId) return
+  // Save column order to backend when changed
+  const saveColumnOrder = async (payload: Array<{ key: string; title: string; order: number }>) => {
     try {
-      const saved = localStorage.getItem(`kanbanOrder:${teamId}`)
-      if (saved) {
-        const arr = JSON.parse(saved)
-        if (Array.isArray(arr) && arr.every((k) => typeof k === 'string')) {
-          setColumns(arr)
-        }
-      }
-    } catch { }
-  }, [teamId])
-
-  useEffect(() => {
-    if (!teamId) return
-    try {
-      localStorage.setItem(`kanbanOrder:${teamId}`, JSON.stringify(columns))
-    } catch { }
-  }, [columns, teamId])
+      await teamApi.updateBoard(teamId, payload)
+    } catch (error: any) {
+      console.error('Failed to save column order:', error)
+      toast.error(error?.message || 'Không thể lưu thứ tự cột')
+    }
+  }
 
   const handleCreateTask = async (newTask: any) => {
     try {
@@ -129,8 +144,9 @@ export default function TeamDetailPage() {
       }
       await taskApi.createTeamTask(teamId, payload)
       await loadTasks()
-    } catch (e) {
+    } catch (e: any) {
       console.error('Create task failed:', e)
+      toast.error(e?.message || 'Không thể tạo công việc')
     }
   }
 
@@ -138,8 +154,9 @@ export default function TeamDetailPage() {
     try {
       await taskApi.updateTask(updated.id, updated)
       await loadTasks()
-    } catch (e) {
+    } catch (e: any) {
       console.error('Update task failed:', e)
+      toast.error(e?.message || 'Không thể cập nhật công việc')
     }
   }
 
@@ -147,8 +164,9 @@ export default function TeamDetailPage() {
     try {
       await taskApi.deleteTask(String(taskId))
       await loadTasks()
-    } catch (e) {
+    } catch (e: any) {
       console.error('Delete task failed:', e)
+      toast.error(e?.message || 'Không thể xóa công việc')
     }
   }
 
@@ -214,6 +232,37 @@ export default function TeamDetailPage() {
   }
 
   const activeMembers = team.members?.filter(member => member.status === 'active') || []
+
+  // Check if current user is owner only
+  const isOwner = team && user ? (
+    team.owner._id === user._id ||
+    team.owner === user._id ||
+    String(team.owner._id) === String(user._id)
+  ) : false
+
+  // Force disable column dragging if not owner (fallback)
+  const canDragColumns = isOwner && team && user && team.owner && user._id
+
+  // Additional check: ensure we have valid IDs
+  const hasValidOwner = team?.owner?._id && typeof team.owner._id === 'string'
+  const hasValidUser = user?._id && typeof user._id === 'string'
+  const finalCanDragColumns = canDragColumns && hasValidOwner && hasValidUser
+
+  // Check if current user is owner or admin (for other permissions)
+  const isOwnerOrAdmin = team && user ? (
+    isOwner ||
+    team.members?.some(member =>
+      (member.user._id === user._id || String(member.user._id) === String(user._id)) &&
+      (member.role === 'owner' || member.role === 'admin') &&
+      member.status === 'active'
+    )
+  ) : false
+
+  // Debug: Log user and team info
+  console.log('Debug - User:', user)
+  console.log('Debug - Team owner:', team?.owner)
+  console.log('Debug - Is owner:', isOwner)
+  console.log('Debug - Is owner or admin:', isOwnerOrAdmin)
 
   return (
     <div className="space-y-6">
@@ -377,25 +426,66 @@ export default function TeamDetailPage() {
 
           {/* Kanban Board */}
           <TabsContent value="board" className="space-y-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Bảng Kanban</h3>
+              {isOwner && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    const newKey = `column-${Date.now()}`
+                    const newTitle = prompt('Tên cột mới:', 'Cột mới')
+                    if (newTitle && newTitle.trim()) {
+                      const newColumns = [...columns, newKey]
+                      const newTitles = { ...columnTitles, [newKey]: newTitle.trim() }
+                      setColumns(newColumns)
+                      setColumnTitles(newTitles)
+                      saveColumnOrder(newColumns.map((k, i) => ({ key: k, title: newTitles[k], order: i })))
+                    }
+                  }}
+                >
+                  + Thêm cột
+                </Button>
+              )}
+            </div>
             <div className="grid gap-4 md:grid-cols-3">
               {columns.map((key) => ({ key, title: columnTitles[key] })).map((col) => (
                 <div
                   key={col.key}
                   className="rounded-md border p-3 min-h-[240px] bg-muted/20"
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragOver={(e) => {
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                    console.log('Drag over column:', col.key)
+                  }}
                   onDrop={async (e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
                     const taskIdData = e.dataTransfer.getData('application/qlcv-task')
                     const colKeyData = e.dataTransfer.getData('application/qlcv-column')
+
+                    console.log('Drop event on column:', col.key, { taskIdData, colKeyData, isOwner })
+
                     if (taskIdData) {
                       try {
-                        await taskApi.updateTask(String(taskIdData), { status: col.key as any })
+                        console.log('Moving task:', taskIdData, 'to column:', col.key)
+                        // Cập nhật position trong database (không thay đổi status)
+                        await taskApi.updateTask(String(taskIdData), { position: col.key })
+                        // Reload tasks để cập nhật giao diện
                         await loadTasks()
-                      } catch (err) {
+                        console.log('Task moved successfully, status unchanged')
+                        toast.success('Di chuyển công việc thành công')
+                      } catch (err: any) {
                         console.error('Move task failed', err)
+                        toast.error(err?.message || 'Không thể di chuyển công việc')
                       }
                       return
                     }
+
                     if (colKeyData) {
+                      if (!isOwner) {
+                        toast.error('Chỉ trưởng nhóm mới có quyền sắp xếp cột')
+                        return
+                      }
                       const fromKey = colKeyData
                       const toKey = col.key
                       if (fromKey !== toKey) {
@@ -406,50 +496,119 @@ export default function TeamDetailPage() {
                           next.splice(toIndex, 0, next.splice(fromIndex, 1)[0])
                           setColumns(next)
                           // Persist to backend
-                          try {
-                            await teamApi.updateBoard(teamId, next.map((k, i) => ({ key: k, title: columnTitles[k], order: i })))
-                          } catch (err) {
-                            console.error('Save column order failed', err)
-                          }
+                          await saveColumnOrder(next.map((k, i) => ({ key: k, title: columnTitles[k], order: i })))
                         }
                       }
                     }
                   }}
                 >
                   <div
-                    className="text-sm font-semibold mb-2 flex items-center justify-between gap-2"
-                    draggable
+                    className={`text-sm font-semibold mb-2 flex items-center justify-between gap-2 ${finalCanDragColumns ? 'cursor-grab active:cursor-grabbing' : 'cursor-not-allowed opacity-50'}`}
+                    draggable={finalCanDragColumns}
                     onDragStart={(e) => {
+                      console.log('Column drag start - finalCanDragColumns:', finalCanDragColumns, 'canDragColumns:', canDragColumns, 'isOwner:', isOwner, 'user:', user?._id, 'team owner:', team?.owner?._id)
+                      if (!finalCanDragColumns) {
+                        console.log('Preventing column drag - not owner')
+                        e.preventDefault()
+                        toast.error('Chỉ trưởng nhóm mới có quyền sắp xếp cột')
+                        return
+                      }
+                      console.log('Allowing column drag - is owner')
                       e.dataTransfer.setData('application/qlcv-column', col.key)
                     }}
                   >
-                    <span className="cursor-grab active:cursor-grabbing">{col.title}</span>
-                    <button
-                      className="text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        const next = prompt('Đổi tên cột', columnTitles[col.key])
-                        if (next && next.trim()) {
-                          setColumnTitles((prev) => ({ ...prev, [col.key]: next.trim() }))
-                          // Persist rename
-                          const payload = columns.map((k, i) => ({ key: k, title: k === col.key ? next.trim() : columnTitles[k], order: i }))
-                          teamApi.updateBoard(teamId, payload).catch((e) => console.error('Save title failed', e))
-                        }
-                      }}
-                    >
-                      Đổi tên
-                    </button>
+                    <span className={finalCanDragColumns ? "cursor-grab active:cursor-grabbing" : "cursor-not-allowed"}>{col.title}</span>
+                    <div className="flex items-center gap-1">
+                      {isOwner && (
+                        <button
+                          className="text-xs text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            const next = prompt('Đổi tên cột', columnTitles[col.key])
+                            if (next && next.trim()) {
+                              const newTitles = { ...columnTitles, [col.key]: next.trim() }
+                              setColumnTitles(newTitles)
+                              // Persist rename
+                              const payload = columns.map((k, i) => ({ key: k, title: newTitles[k], order: i }))
+                              teamApi.updateBoard(teamId, payload).catch((e: any) => {
+                                console.error('Save title failed', e)
+                                toast.error(e?.message || 'Không thể lưu tên cột')
+                              })
+                            }
+                          }}
+                        >
+                          Đổi tên
+                        </button>
+                      )}
+                      {columns.length > 1 && isOwner && (
+                        <button
+                          className="text-xs text-red-500 hover:text-red-700"
+                          onClick={() => {
+                            if (confirm('Xóa cột này?')) {
+                              const newColumns = columns.filter(k => k !== col.key)
+                              const newTitles = { ...columnTitles }
+                              delete newTitles[col.key]
+                              setColumns(newColumns)
+                              setColumnTitles(newTitles)
+                              saveColumnOrder(newColumns.map((k, i) => ({ key: k, title: newTitles[k], order: i })))
+                            }
+                          }}
+                        >
+                          Xóa
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-2">
                     {tasks
-                      .filter((t) => t.status === col.key)
+                      .filter((t) => {
+                        // Hiển thị task theo position từ database hoặc local state
+                        const position = t.position || taskPositions[t.id] || t.status
+                        return position === col.key
+                      })
                       .map((task) => (
                         <div
                           key={task.id}
-                          draggable
-                          onDragStart={(e) => e.dataTransfer.setData('application/qlcv-task', String(task.id))}
-                          className="cursor-grab active:cursor-grabbing"
+                          className="relative group"
                         >
-                          <TaskCard task={task} onEdit={handleEditTask} onDelete={handleDeleteTask} />
+                          <div
+                            draggable={true}
+                            onDragStart={(e) => {
+                              console.log('Task drag start:', task.id, 'isOwner:', isOwner)
+                              e.stopPropagation()
+                              e.dataTransfer.setData('application/qlcv-task', String(task.id))
+                              e.dataTransfer.effectAllowed = 'move'
+                              console.log('Data set for task:', task.id)
+                            }}
+                            onDragEnd={(e) => {
+                              console.log('Task drag end:', task.id)
+                            }}
+                            className="cursor-grab active:cursor-grabbing select-none"
+                            style={{
+                              pointerEvents: 'auto',
+                              userSelect: 'none',
+                              WebkitUserSelect: 'none'
+                            }}
+                          >
+                            <TaskCard task={task} onEdit={handleEditTask} onDelete={handleDeleteTask} hideTeamLink={true} />
+                          </div>
+                          {isOwner && (
+                            <div
+                              className="absolute top-2 right-2 z-10 cursor-grab active:cursor-grabbing p-1 hover:bg-gray-100 rounded bg-white/80 border shadow-sm opacity-30 group-hover:opacity-100 transition-opacity"
+                              draggable={true}
+                              onDragStart={(e) => {
+                                console.log('Task drag start from handle:', task.id, 'isOwner:', isOwner)
+                                e.stopPropagation()
+                                e.dataTransfer.setData('application/qlcv-task', String(task.id))
+                                e.dataTransfer.effectAllowed = 'move'
+                                console.log('Data set for task from handle:', task.id)
+                              }}
+                              onDragEnd={(e) => {
+                                console.log('Task drag end from handle:', task.id)
+                              }}
+                            >
+                              <GripVertical className="h-4 w-4 text-gray-500" />
+                            </div>
+                          )}
                         </div>
                       ))}
                   </div>
