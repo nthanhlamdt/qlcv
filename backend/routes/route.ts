@@ -12,7 +12,7 @@ router.use('/auth', authRoutes)
 router.use('/notifications', notificationRoutes)
 router.use('/realtime', realtimeRoutes)
 router.use('/teams', teamRoutes)
-router.use('/', taskRoutes)
+router.use('/tasks', taskRoutes)
 
 // Root endpoint
 router.get('/', (req, res) => {

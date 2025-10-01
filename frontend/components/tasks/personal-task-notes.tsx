@@ -1,38 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { StickyNote, Plus, Edit2, Trash2 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { vi } from "date-fns/locale"
+import { taskApi } from "@/lib/task-api"
 
 interface Note {
-  id: number
+  id: string | number
   content: string
   createdAt: Date
-  updatedAt: Date
+  updatedAt?: Date
 }
 
 interface PersonalTaskNotesProps {
-  taskId: number
+  taskId: number | string
 }
 
-const initialNotes: Note[] = [
-  {
-    id: 1,
-    content: "Cần tham khảo thêm tài liệu về UX/UI design patterns trước khi bắt đầu thiết kế.",
-    createdAt: new Date(2024, 0, 15, 10, 30),
-    updatedAt: new Date(2024, 0, 15, 10, 30),
-  },
-  {
-    id: 2,
-    content: "Đã tìm hiểu về Figma và các công cụ design. Sẽ bắt đầu tạo wireframe vào ngày mai.",
-    createdAt: new Date(2024, 0, 16, 14, 45),
-    updatedAt: new Date(2024, 0, 16, 14, 45),
-  },
-]
+const initialNotes: Note[] = []
 
 export function PersonalTaskNotes({ taskId }: PersonalTaskNotesProps) {
   const [notes, setNotes] = useState<Note[]>(initialNotes)
@@ -40,21 +28,19 @@ export function PersonalTaskNotes({ taskId }: PersonalTaskNotesProps) {
   const [editingNote, setEditingNote] = useState<number | null>(null)
   const [editContent, setEditContent] = useState("")
 
-  const handleAddNote = () => {
+  useEffect(() => {
+    // Load notes from task details if needed later
+  }, [taskId])
+
+  const handleAddNote = async () => {
     if (!newNote.trim()) return
-
-    const note: Note = {
-      id: Date.now(),
-      content: newNote,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }
-
-    setNotes([...notes, note])
+    const res = await taskApi.addNote(String(taskId), newNote.trim())
+    const note: Note = { id: (res as any)._id || Date.now(), content: newNote.trim(), createdAt: new Date() }
+    setNotes([note, ...notes])
     setNewNote("")
   }
 
-  const handleEditNote = (noteId: number) => {
+  const handleEditNote = (noteId: any) => {
     const note = notes.find((n) => n.id === noteId)
     if (note) {
       setEditingNote(noteId)
@@ -72,7 +58,7 @@ export function PersonalTaskNotes({ taskId }: PersonalTaskNotesProps) {
     setEditContent("")
   }
 
-  const handleDeleteNote = (noteId: number) => {
+  const handleDeleteNote = (noteId: any) => {
     setNotes(notes.filter((note) => note.id !== noteId))
   }
 
@@ -105,8 +91,12 @@ export function PersonalTaskNotes({ taskId }: PersonalTaskNotesProps) {
                   <p className="text-sm leading-relaxed mb-2">{note.content}</p>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">
-                      {note.updatedAt > note.createdAt ? "Cập nhật" : "Tạo"}{" "}
-                      {formatDistanceToNow(note.updatedAt, { addSuffix: true, locale: vi })}
+                      {(() => {
+                        const created = new Date(note.createdAt)
+                        const updated = note.updatedAt ? new Date(note.updatedAt) : created
+                        const label = note.updatedAt && updated.getTime() > created.getTime() ? "Cập nhật" : "Tạo"
+                        return `${label} ${formatDistanceToNow(updated, { addSuffix: true, locale: vi })}`
+                      })()}
                     </span>
                     <div className="flex gap-1">
                       <Button size="sm" variant="ghost" onClick={() => handleEditNote(note.id)}>

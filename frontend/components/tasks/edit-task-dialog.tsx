@@ -1,5 +1,5 @@
 "use client"
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type React from "react"
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -12,13 +12,13 @@ import { Badge } from "@/components/ui/badge"
 import { X } from "lucide-react"
 
 interface Task {
-  id: number
-  title: string
-  description: string
+  id: number | string
+  title?: string
+  description?: string
   status: "pending" | "in-progress" | "completed"
   priority: "high" | "medium" | "low"
-  assignee: string
-  dueDate: string
+  assignee?: string
+  dueDate?: string
   tags: string[]
 }
 
@@ -26,27 +26,67 @@ interface EditTaskDialogProps {
   task: Task | null
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSave: (task: Task) => void
+  onSave: (task: any) => void
 }
 
 export function EditTaskDialog({ task, open, onOpenChange, onSave }: EditTaskDialogProps) {
-  const [formData, setFormData] = useState<Task>(
-    task || {
-      id: 0,
-      title: "",
-      description: "",
-      status: "pending",
-      priority: "medium",
-      assignee: "",
-      dueDate: "",
-      tags: [],
-    },
-  )
+  const [formData, setFormData] = useState<Task>({
+    id: 0,
+    title: "",
+    description: "",
+    status: "pending",
+    priority: "medium",
+    tags: [],
+  })
   const [newTag, setNewTag] = useState("")
+
+  // Convert displayed date to input[type=date] value
+  const formatDateForInput = (value?: string) => {
+    if (!value) return ""
+    // cases: dd/MM/yyyy or yyyy-MM-dd or ISO
+    if (value.includes("/")) {
+      const [d, m, y] = value.split("/")
+      if (d && m && y) return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
+    }
+    if (value.includes("T")) {
+      const date = new Date(value)
+      if (!isNaN(date.getTime())) {
+        const mm = String(date.getMonth() + 1).padStart(2, '0')
+        const dd = String(date.getDate()).padStart(2, '0')
+        return `${date.getFullYear()}-${mm}-${dd}`
+      }
+    }
+    return value
+  }
+
+  useEffect(() => {
+    if (task) {
+      setFormData({
+        id: task.id,
+        title: task.title || "",
+        description: task.description || "",
+        status: task.status,
+        priority: task.priority,
+        assignee: task.assignee,
+        dueDate: formatDateForInput(task.dueDate),
+        tags: task.tags || [],
+      })
+    }
+  }, [task])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    onSave(formData)
+    const payload: any = {
+      id: formData.id,
+      title: formData.title,
+      description: formData.description,
+      status: formData.status,
+      priority: formData.priority,
+      tags: formData.tags,
+    }
+    if (formData.assignee !== undefined) payload.assignee = formData.assignee
+    if (formData.dueDate) payload.dueDate = new Date(formData.dueDate).toISOString()
+    onSave(payload)
     onOpenChange(false)
   }
 
@@ -136,22 +176,24 @@ export function EditTaskDialog({ task, open, onOpenChange, onSave }: EditTaskDia
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="assignee">Người thực hiện</Label>
-            <Input
-              id="assignee"
-              value={formData.assignee}
-              onChange={(e) => setFormData((prev) => ({ ...prev, assignee: e.target.value }))}
-              placeholder="Nhập tên người thực hiện"
-            />
-          </div>
+          {formData.assignee !== undefined && (
+            <div className="space-y-2">
+              <Label htmlFor="assignee">Người thực hiện</Label>
+              <Input
+                id="assignee"
+                value={formData.assignee || ""}
+                onChange={(e) => setFormData((prev) => ({ ...prev, assignee: e.target.value }))}
+                placeholder="Nhập tên người thực hiện"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="dueDate">Hạn chót</Label>
             <Input
               id="dueDate"
               type="date"
-              value={formData.dueDate}
+              value={formData.dueDate || ""}
               onChange={(e) => setFormData((prev) => ({ ...prev, dueDate: e.target.value }))}
             />
           </div>

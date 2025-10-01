@@ -18,6 +18,13 @@ export interface ITeam extends Document {
     allowMemberCreateProject: boolean
     allowMemberDeleteProject: boolean
   }
+  board?: {
+    columns: Array<{
+      key: string
+      title: string
+      order: number
+    }>
+  }
   isActive: boolean
   createdAt: Date
   updatedAt: Date
@@ -77,6 +84,27 @@ const teamSchema: Schema<ITeam> = new Schema(
       allowMemberDeleteProject: {
         type: Boolean,
         default: false,
+      },
+    },
+    board: {
+      columns: {
+        type: [
+          new Schema(
+            {
+              key: { type: String, required: true },
+              title: { type: String, required: true },
+              order: { type: Number, default: 0 },
+            },
+            { _id: false },
+          ),
+        ],
+        default: [
+          { key: 'backlog', title: 'Backlog', order: 0 },
+          { key: 'pending', title: 'Chờ xử lý', order: 1 },
+          { key: 'in-progress', title: 'Đang thực hiện', order: 2 },
+          { key: 'review', title: 'Chờ duyệt', order: 3 },
+          { key: 'completed', title: 'Hoàn thành', order: 4 },
+        ],
       },
     },
     isActive: {

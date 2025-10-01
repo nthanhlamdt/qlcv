@@ -24,6 +24,7 @@ import {
   InviteMemberData,
   TeamFilters,
   getTeams,
+  updateTeamBoard,
 } from '../services/team.service'
 
 // Tạo nhóm mới
@@ -111,6 +112,15 @@ export const updateTeamInfo = CatchAsyncError(async (req: AuthenticatedRequest, 
     message: 'Nhóm đã được cập nhật thành công',
     data: team,
   })
+})
+
+// Cập nhật board (cột Kanban)
+export const updateBoard = CatchAsyncError(async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  const { teamId } = req.params
+  const userId = req.user?.id as string
+  const { columns } = req.body
+  const team = await updateTeamBoard(teamId, columns, userId)
+  res.status(200).json({ success: true, data: team?.board })
 })
 
 // Xóa nhóm

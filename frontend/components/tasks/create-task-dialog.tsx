@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { CalendarIcon, Plus } from "lucide-react"
@@ -25,14 +26,15 @@ import { vi } from "date-fns/locale"
 
 interface CreateTaskDialogProps {
   onCreateTask: (task: any) => void
+  members?: Array<{ id: string; name: string }>
 }
 
-export function CreateTaskDialog({ onCreateTask }: CreateTaskDialogProps) {
+export function CreateTaskDialog({ onCreateTask, members = [] }: CreateTaskDialogProps) {
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [priority, setPriority] = useState("medium")
-  const [assignee, setAssignee] = useState("")
+  const [assignees, setAssignees] = useState<string[]>([])
   const [dueDate, setDueDate] = useState<Date>()
   const [tags, setTags] = useState("")
 
@@ -45,8 +47,8 @@ export function CreateTaskDialog({ onCreateTask }: CreateTaskDialogProps) {
       description,
       status: "pending" as const,
       priority: priority as "high" | "medium" | "low",
-      assignee: assignee || "Chưa phân công",
-      dueDate: dueDate ? format(dueDate, "dd/MM/yyyy", { locale: vi }) : "Chưa có hạn",
+      assignees,
+      dueDate: dueDate ? dueDate.toISOString() : undefined,
       avatar: "/diverse-user-avatars.png",
       tags: tags
         .split(",")
@@ -60,7 +62,7 @@ export function CreateTaskDialog({ onCreateTask }: CreateTaskDialogProps) {
     setTitle("")
     setDescription("")
     setPriority("medium")
-    setAssignee("")
+    setAssignees([])
     setDueDate(undefined)
     setTags("")
     setOpen(false)
@@ -120,17 +122,27 @@ export function CreateTaskDialog({ onCreateTask }: CreateTaskDialogProps) {
 
               <div className="grid gap-2">
                 <Label>Người thực hiện</Label>
-                <Select value={assignee} onValueChange={setAssignee}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Chọn người thực hiện" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="nguyen-van-a">Nguyễn Văn A</SelectItem>
-                    <SelectItem value="tran-thi-b">Trần Thị B</SelectItem>
-                    <SelectItem value="le-van-c">Lê Văn C</SelectItem>
-                    <SelectItem value="pham-thi-d">Phạm Thị D</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="border rounded-md p-2 space-y-2 max-h-40 overflow-auto">
+                  {members.length === 0 && (
+                    <div className="text-sm text-muted-foreground">Không có thành viên</div>
+                  )}
+                  {members.map((m) => {
+                    const checked = assignees.includes(m.id)
+                    return (
+                      <label key={m.id} className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={(v) => {
+                            setAssignees((prev) =>
+                              v ? [...prev, m.id] : prev.filter((id) => id !== m.id)
+                            )
+                          }}
+                        />
+                        <span>{m.name}</span>
+                      </label>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 

@@ -157,6 +157,25 @@ export const updateTeam = async (teamId: string, updateData: Partial<CreateTeamD
   return updatedTeam || null
 }
 
+export const updateTeamBoard = async (
+  teamId: string,
+  columns: Array<{ key: string; title: string; order: number }>,
+  userId: string,
+): Promise<ITeam | null> => {
+  const team = await TeamModel.findById(teamId)
+  if (!team) throw new ErrorHandler('Nhóm không tồn tại', 404)
+  const isOwner = team.owner.toString() === userId
+  const isAdmin = team.members.some(m => m.user.toString() === userId && (m.role === 'admin' || m.role === 'owner') && m.status === 'active')
+  if (!isOwner && !isAdmin) throw new ErrorHandler('Bạn không có quyền cập nhật board', 403)
+
+  const sorted = [...columns].sort((a, b) => a.order - b.order)
+    ; (team as any).board = { columns: sorted }
+  await team.save()
+  return await TeamModel.findById(teamId)
+    .populate('owner', 'name email avatarUrl')
+    .populate('members.user', 'name email avatarUrl')
+}
+
 // Xóa nhóm
 export const deleteTeam = async (teamId: string, userId: string): Promise<{ message: string }> => {
   const team = await TeamModel.findById(teamId)

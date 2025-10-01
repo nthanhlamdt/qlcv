@@ -1,11 +1,14 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { CalendarHeader } from "@/components/calendar/calendar-header"
 import { MonthView } from "@/components/calendar/month-view"
 import { WeekView } from "@/components/calendar/week-view"
 import { DayView } from "@/components/calendar/day-view"
 import { CreateEventDialog } from "@/components/calendar/create-event-dialog"
+import { taskApi } from "@/lib/task-api"
+import { teamApi } from "@/lib/team-api"
+import { useRouter } from "next/navigation"
 
 interface CalendarEvent {
   id: number
@@ -17,73 +20,7 @@ interface CalendarEvent {
   priority?: "high" | "medium" | "low"
 }
 
-const initialEvents: CalendarEvent[] = [
-  {
-    id: 1,
-    title: "Họp team hàng tuần",
-    date: new Date(2024, 0, 15),
-    time: "09:00",
-    description: "Review tiến độ dự án và lên kế hoạch tuần mới",
-    type: "meeting",
-    priority: "high",
-  },
-  {
-    id: 2,
-    title: "Deadline thiết kế UI",
-    date: new Date(2024, 0, 18),
-    type: "deadline",
-    priority: "high",
-  },
-  {
-    id: 3,
-    title: "Code review",
-    date: new Date(2024, 0, 16),
-    time: "14:00",
-    description: "Review code cho feature mới",
-    type: "task",
-    priority: "medium",
-  },
-  {
-    id: 4,
-    title: "Khám sức khỏe định kỳ",
-    date: new Date(2024, 0, 20),
-    time: "08:30",
-    type: "personal",
-    priority: "medium",
-  },
-  {
-    id: 5,
-    title: "Demo sản phẩm cho khách hàng",
-    date: new Date(2024, 0, 22),
-    time: "15:00",
-    description: "Trình bày tính năng mới cho khách hàng ABC",
-    type: "meeting",
-    priority: "high",
-  },
-  {
-    id: 6,
-    title: "Viết tài liệu API",
-    date: new Date(2024, 0, 17),
-    type: "task",
-    priority: "low",
-  },
-  {
-    id: 7,
-    title: "Standup meeting",
-    date: new Date(2024, 0, 19),
-    time: "09:30",
-    type: "meeting",
-    priority: "medium",
-  },
-  {
-    id: 8,
-    title: "Sprint planning",
-    date: new Date(2024, 0, 23),
-    time: "10:00",
-    type: "meeting",
-    priority: "high",
-  },
-]
+const initialEvents: CalendarEvent[] = []
 
 export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -91,6 +28,46 @@ export default function CalendarPage() {
   const [events, setEvents] = useState<CalendarEvent[]>(initialEvents)
   const [createEventOpen, setCreateEventOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date>()
+  const router = useRouter()
+
+  const loadScheduledTasks = async () => {
+    const result = await taskApi.listPersonal()
+    const personal = (result.tasks || []).filter((t: any) => t.dueDate)
+    const personalEvents: CalendarEvent[] = personal.map((t: any) => ({
+      id: t._id,
+      title: t.title,
+      date: new Date(t.dueDate),
+      type: "task",
+      priority: t.priority,
+    }))
+
+    // Optional: include team tasks with due date
+    let teamEvents: CalendarEvent[] = []
+    try {
+      const myTeams = await teamApi.getMyTeams()
+      const teams = myTeams.teams || myTeams.data?.teams || []
+      const all = await Promise.all(
+        teams.map(async (tm: any) => {
+          try {
+            const res = await taskApi.listTeamTasks(tm._id)
+            const list = res.tasks || []
+            return list
+              .filter((t: any) => t.dueDate)
+              .map((t: any) => ({ id: t._id, title: t.title, date: new Date(t.dueDate), type: "task" as const, priority: t.priority }))
+          } catch {
+            return []
+          }
+        })
+      )
+      teamEvents = all.flat()
+    } catch { }
+
+    setEvents([...personalEvents, ...teamEvents])
+  }
+
+  useEffect(() => {
+    loadScheduledTasks()
+  }, [])
 
   const handleCreateEvent = () => {
     setSelectedDate(undefined)
@@ -103,8 +80,8 @@ export default function CalendarPage() {
   }
 
   const handleEventClick = (event: CalendarEvent) => {
-    // TODO: Implement event detail view
-    console.log("Event clicked:", event)
+    // Navigate to task detail if it's a task
+    router.push(`/tasks/${event.id}`)
   }
 
   const handleCreateEventSubmit = (newEvent: CalendarEvent) => {

@@ -56,8 +56,27 @@ const priorityLabels = {
 }
 
 export function TaskCard({ task, onEdit, onDelete }: TaskCardProps) {
+  const frame: Record<string, { frame: string; accent: string; hover: string }> = {
+    high: {
+      frame: "border-red-300 bg-red-50/60 dark:border-red-900/60 dark:bg-red-950/40",
+      accent: "bg-gradient-to-b from-red-500 to-red-400",
+      hover: "hover:shadow-red-200/60 dark:hover:shadow-red-900/30",
+    },
+    medium: {
+      frame: "border-amber-300 bg-amber-50/60 dark:border-amber-900/60 dark:bg-amber-950/40",
+      accent: "bg-gradient-to-b from-amber-400 to-amber-300",
+      hover: "hover:shadow-amber-200/60 dark:hover:shadow-amber-900/30",
+    },
+    low: {
+      frame: "border-slate-300 bg-slate-50/60 dark:border-slate-800/70 dark:bg-slate-900/30",
+      accent: "bg-gradient-to-b from-slate-400 to-slate-300",
+      hover: "hover:shadow-slate-200/50 dark:hover:shadow-slate-900/20",
+    },
+  }
+  const styles = frame[task.priority] || frame.low
   return (
-    <Card className="hover:shadow-md transition-shadow">
+    <Card className={`relative overflow-hidden transition-shadow border ${styles.frame} ${styles.hover} hover:shadow-lg`}>
+      <span className={`absolute left-0 top-0 h-full w-1.5 ${styles.accent}`} />
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1">

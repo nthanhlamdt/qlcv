@@ -13,6 +13,7 @@ import {
   removeTeamMember,
   updateTeamMemberRole,
   getInviteByToken,
+  updateBoard,
 } from '../controllers/team.controllers'
 
 const router = Router()
@@ -28,6 +29,7 @@ router.post('/', createNewTeam) // Tạo nhóm mới
 router.get('/', getUserTeams) // Lấy danh sách nhóm của user
 router.get('/:teamId', getTeamDetails) // Lấy thông tin chi tiết nhóm
 router.put('/:teamId', updateTeamInfo) // Cập nhật thông tin nhóm
+router.put('/:teamId/board', updateBoard) // Cập nhật board (cột Kanban)
 router.delete('/:teamId', deleteTeamById) // Xóa nhóm
 
 // Team invitations

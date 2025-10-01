@@ -1,99 +1,194 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useParams, useRouter } from "next/navigation"
+import { taskApi } from "@/lib/task-api"
 import { TaskDetailsInfo } from "@/components/tasks/task-details-info"
 import { TaskComments } from "@/components/tasks/task-comments"
-import { TaskActivity } from "@/components/tasks/task-activity"
-import { PersonalTaskHeader } from "@/components/tasks/personal-task-header"
-import { TeamTaskHeader } from "@/components/tasks/team-task-header"
-import { useRouter } from "next/navigation"
 import { PersonalTaskNotes } from "@/components/tasks/personal-task-notes"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { File as FileIcon } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { ArrowLeft, Edit, Trash2, Calendar, Users } from "lucide-react"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
-// Mock data - trong thực tế sẽ fetch từ API dựa trên ID
-const mockTasks = {
-  "1": {
-    id: 1,
-    title: "Thiết kế giao diện trang chủ",
-    description: "Tạo mockup và prototype cho trang chủ website mới với focus vào UX/UI hiện đại.",
-    status: "in-progress" as const,
-    priority: "high" as const,
-    assignee: "Nguyễn Văn A",
-    dueDate: "15/01/2024",
-    avatar: "/user-avatar-1.png",
-    tags: ["design", "frontend", "ui/ux"],
-    createdDate: "10/01/2024",
-    updatedDate: "15/01/2024",
-    estimatedHours: 16,
-    actualHours: 14,
-    type: "personal" as const,
-  },
-  "2": {
-    id: 2,
-    title: "Phát triển API đăng nhập",
-    description: "Xây dựng endpoint API cho chức năng đăng nhập với JWT authentication",
-    status: "in-progress" as const,
-    priority: "high" as const,
-    assignee: "Trần Thị B",
-    dueDate: "18/01/2024",
-    avatar: "/user-avatar-2.png",
-    tags: ["backend", "api", "authentication"],
-    createdDate: "12/01/2024",
-    updatedDate: "16/01/2024",
-    estimatedHours: 12,
-    actualHours: 8,
-    type: "team" as const,
-    teamId: 1,
-    teamName: "Website Redesign Project",
-  },
-}
-
-export default function TaskDetailPage({ params }: { params: { id: string } }) {
+export default function TaskDetailPage() {
+  const params = useParams()
   const router = useRouter()
-  const [task, setTask] = useState(mockTasks[params.id as keyof typeof mockTasks] || mockTasks["1"])
+  const taskId = String(params.id)
 
-  const handleEdit = () => {
-    console.log("Edit task:", task.id)
+  const [task, setTask] = useState<any | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [attachments, setAttachments] = useState<Array<{ id: string; name: string; url: string; type: string; size: number }>>([])
+
+  const loadTask = async () => {
+    try {
+      setLoading(true)
+      const t = await taskApi.getTask(taskId)
+      const mapped: any = {
+        id: t._id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        priority: t.priority,
+        assignee: (t.assignees || []).map((u: any) => u?.name).filter(Boolean).join(", ") || "Chưa phân công",
+        dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString("vi-VN") : "Chưa có hạn",
+        avatar: undefined,
+        tags: t.tags || [],
+        createdDate: t.createdAt ? new Date(t.createdAt).toLocaleDateString("vi-VN") : "",
+        updatedDate: t.updatedAt ? new Date(t.updatedAt).toLocaleDateString("vi-VN") : "",
+        estimatedHours: (t as any).estimatedHours || 0,
+        actualHours: (t as any).actualHours || 0,
+        type: (t as any).type ? (t as any).type : (t.team ? 'team' : 'personal'),
+        teamId: t.team || undefined,
+        teamName: (t.team && t.team.name) || undefined,
+      }
+      setTask(mapped)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleDelete = () => {
-    console.log("Delete task:", task.id)
+  useEffect(() => {
+    if (taskId) loadTask()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId])
+
+  const handleEdit = async () => {
+    router.push(`/tasks/${taskId}`) // placeholder; could open edit dialog page
+  }
+
+  const handleDelete = async () => {
+    if (!confirm("Bạn có chắc muốn xóa công việc này?")) return
+    await taskApi.deleteTask(taskId)
     router.push("/tasks")
   }
 
-  const handleStatusChange = (newStatus: string) => {
-    setTask({
-      ...task,
-      status: newStatus as "pending" | "in-progress" | "completed",
-      updatedDate: new Date().toLocaleDateString("vi-VN"),
-    })
+  const handleStatusChange = async (newStatus: string) => {
+    await taskApi.updateTask(taskId, { status: newStatus as any })
+    await loadTask()
   }
 
-  const handleComplete = (data: { note: string; files: File[] }) => {
-    console.log("Task completed with:", data)
-    // TODO: Save completion data to backend
+  const handleComplete = async (data: { note: string; files: File[] }) => {
+    await taskApi.updateTask(taskId, { status: "completed" as any })
+    await loadTask()
   }
 
-  const TaskHeader = task.type === "personal" ? PersonalTaskHeader : TeamTaskHeader
+  if (loading) return <div>Đang tải...</div>
+  if (!task) return <div>Không tìm thấy công việc</div>
 
   return (
     <div className="space-y-6">
-      <TaskHeader
-        task={task}
-        onEdit={handleEdit}
-        onDelete={handleDelete}
-        onStatusChange={handleStatusChange}
-        onComplete={handleComplete}
-      />
+      {/* Top bar: back + actions */}
+      <div className="flex items-center justify-between">
+        <Button variant="ghost" size="sm" onClick={() => router.push("/tasks")}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Quay lại
+        </Button>
+        <div className="space-x-2">
+          <Button variant="outline" size="sm" onClick={handleEdit}>
+            <Edit className="mr-2 h-4 w-4" /> Chỉnh sửa
+          </Button>
+          <Button variant="destructive" size="sm" onClick={handleDelete}>
+            <Trash2 className="mr-2 h-4 w-4" /> Xóa
+          </Button>
+        </div>
+      </div>
+
+      {/* Summary header */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-xl font-semibold leading-tight">{task.title}</h1>
+              <p className="text-xs text-muted-foreground mt-0.5">Mã: {task.id}</p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Badge variant="outline" className={
+                task.status === 'completed' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
+                  task.status === 'in-progress' ? 'bg-blue-500/10 text-blue-600 border-blue-500/20' :
+                    'bg-orange-500/10 text-orange-600 border-orange-500/20'
+                    + ' h-6 px-2 text-xs'}>
+                {task.status === 'pending' ? 'Chờ xử lý' : task.status === 'in-progress' ? 'Đang thực hiện' : 'Hoàn thành'}
+              </Badge>
+              <Badge variant="outline" className="h-6 px-2 text-xs">Ưu tiên {task.priority === 'high' ? 'Cao' : task.priority === 'medium' ? 'Trung bình' : 'Thấp'}</Badge>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3 text-xs md:text-sm">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Calendar className="h-4 w-4" />
+              <span>Hạn: {task.dueDate}</span>
+            </div>
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Users className="h-4 w-4" />
+              <span>Người thực hiện: {task.assignee}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
           <TaskDetailsInfo task={task} />
           {task.type === "personal" ? <PersonalTaskNotes taskId={task.id} /> : <TaskComments taskId={task.id} />}
         </div>
-        <div className="space-y-6">
-          <TaskActivity taskId={task.id} />
+        <div className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Tệp đính kèm</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                type="file"
+                multiple
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || [])
+                  const next = files.map((f) => ({
+                    id: `${Date.now()}-${f.name}`,
+                    name: f.name,
+                    url: URL.createObjectURL(f),
+                    type: f.type,
+                    size: f.size,
+                  }))
+                  setAttachments((prev) => [...next, ...prev])
+                  e.currentTarget.value = ''
+                }}
+              />
+
+              {attachments.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Chưa có tệp nào. Hãy chọn tệp để tải lên.</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+                  {attachments.map((f) => (
+                    <div key={f.id} className="relative border rounded-md p-2 group">
+                      <button
+                        className="absolute right-1 top-1 opacity-0 group-hover:opacity-100 transition"
+                        onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== f.id))}
+                        aria-label="Xóa"
+                      >
+                        <Trash2 className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                      {f.type.startsWith('image/') ? (
+                        <img src={f.url} alt={f.name} className="h-24 w-full object-cover rounded" />
+                      ) : (
+                        <div className="h-24 w-full flex items-center justify-center bg-muted rounded">
+                          <FileIcon className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+                      <div className="mt-1 text-xs line-clamp-2" title={f.name}>{f.name}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
   )
 }
+
+

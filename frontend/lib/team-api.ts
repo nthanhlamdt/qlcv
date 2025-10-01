@@ -103,6 +103,15 @@ export const teamApi = {
     return response.data || response
   },
 
+  // Cập nhật board (cột Kanban)
+  updateBoard: async (
+    teamId: string,
+    columns: Array<{ key: string; title: string; order: number }>,
+  ): Promise<any> => {
+    const response = await putJson(`/teams/${teamId}/board`, { columns })
+    return response.data || response
+  },
+
   // Xóa nhóm
   deleteTeam: async (teamId: string): Promise<void> => {
     await deleteJson(`/teams/${teamId}`)

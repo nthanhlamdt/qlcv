@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { TaskFilters } from "@/components/tasks/task-filters"
 import { TaskCard } from "@/components/tasks/task-card"
 import { CreateTaskDialog } from "@/components/tasks/create-task-dialog"
@@ -8,96 +8,9 @@ import { EditTaskDialog } from "@/components/tasks/edit-task-dialog"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { LayoutGrid, List } from "lucide-react"
+import { taskApi } from "@/lib/task-api"
 
-const initialTasks = [
-  {
-    id: 1,
-    title: "Thiết kế giao diện trang chủ",
-    description: "Tạo mockup và prototype cho trang chủ website mới với focus vào UX/UI hiện đại",
-    status: "completed" as const,
-    priority: "high" as const,
-    assignee: "Nguyễn Văn A",
-    dueDate: "15/01/2024",
-    avatar: "/user-avatar-1.png",
-    tags: ["design", "frontend", "ui/ux"],
-    type: "personal" as const,
-  },
-  {
-    id: 2,
-    title: "Phát triển API đăng nhập",
-    description: "Xây dựng endpoint API cho chức năng đăng nhập với JWT authentication",
-    status: "in-progress" as const,
-    priority: "medium" as const,
-    assignee: "Trần Thị B",
-    dueDate: "18/01/2024",
-    avatar: "/diverse-user-avatar-set-2.png",
-    tags: ["backend", "api", "authentication"],
-    type: "team" as const,
-    team: {
-      id: 1,
-      name: "Team Backend",
-      avatar: "/team-avatar-1.png",
-    },
-  },
-  {
-    id: 3,
-    title: "Kiểm thử tính năng thanh toán",
-    description: "Thực hiện test case cho module thanh toán online và tích hợp payment gateway",
-    status: "pending" as const,
-    priority: "high" as const,
-    assignee: "Lê Văn C",
-    dueDate: "20/01/2024",
-    avatar: "/diverse-user-avatars-3.png",
-    tags: ["testing", "payment", "qa"],
-    type: "personal" as const,
-  },
-  {
-    id: 4,
-    title: "Tối ưu hóa database",
-    description: "Cải thiện performance database bằng cách tối ưu query và thêm index",
-    status: "in-progress" as const,
-    priority: "low" as const,
-    assignee: "Phạm Thị D",
-    dueDate: "25/01/2024",
-    avatar: "/user-avatar-4.png",
-    tags: ["database", "performance", "optimization"],
-    type: "team" as const,
-    team: {
-      id: 2,
-      name: "Team Database",
-      avatar: "/team-avatar-2.png",
-    },
-  },
-  {
-    id: 5,
-    title: "Viết tài liệu API",
-    description: "Tạo documentation chi tiết cho tất cả API endpoints sử dụng Swagger",
-    status: "pending" as const,
-    priority: "medium" as const,
-    assignee: "Nguyễn Văn A",
-    dueDate: "22/01/2024",
-    avatar: "/user-avatar-1.png",
-    tags: ["documentation", "api"],
-    type: "team" as const,
-    team: {
-      id: 1,
-      name: "Team Backend",
-      avatar: "/team-avatar-1.png",
-    },
-  },
-  {
-    id: 6,
-    title: "Setup CI/CD pipeline",
-    description: "Cấu hình GitHub Actions để tự động deploy lên staging và production",
-    status: "pending" as const,
-    priority: "high" as const,
-    assignee: "Trần Thị B",
-    dueDate: "28/01/2024",
-    avatar: "/diverse-user-avatar-set-2.png",
-    tags: ["devops", "ci/cd", "deployment"],
-    type: "personal" as const,
-  },
-]
+const initialTasks: any[] = []
 
 export default function TasksPage() {
   const [tasks, setTasks] = useState(initialTasks)
@@ -105,9 +18,38 @@ export default function TasksPage() {
   const [editingTask, setEditingTask] = useState<any>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
-  const handleCreateTask = (newTask: any) => {
-    const taskWithId = { ...newTask, id: Date.now() }
-    setTasks([taskWithId, ...tasks])
+  const loadPersonal = async () => {
+    const result = await taskApi.listPersonal()
+    const list = result.tasks || []
+    setTasks(
+      list.map((t: any) => ({
+        id: t._id,
+        title: t.title,
+        description: t.description,
+        status: t.status,
+        priority: t.priority,
+        assignee: 'Tôi',
+        dueDate: t.dueDate ? new Date(t.dueDate).toLocaleDateString('vi-VN') : 'Chưa có hạn',
+        tags: t.tags || [],
+        type: 'personal' as const,
+      }))
+    )
+  }
+
+  useEffect(() => {
+    loadPersonal()
+  }, [])
+
+  const handleCreateTask = async (newTask: any) => {
+    await taskApi.createPersonal({
+      title: newTask.title,
+      description: newTask.description,
+      status: newTask.status,
+      priority: newTask.priority,
+      tags: newTask.tags,
+      dueDate: newTask.dueDate,
+    })
+    await loadPersonal()
   }
 
   const handleEditTask = (task: any) => {
@@ -115,13 +57,15 @@ export default function TasksPage() {
     setIsEditDialogOpen(true)
   }
 
-  const handleSaveTask = (updatedTask: any) => {
-    setTasks(tasks.map((task) => (task.id === updatedTask.id ? updatedTask : task)))
+  const handleSaveTask = async (updatedTask: any) => {
+    await taskApi.updateTask(updatedTask.id, updatedTask)
     setEditingTask(null)
+    await loadPersonal()
   }
 
-  const handleDeleteTask = (taskId: number) => {
-    setTasks(tasks.filter((task) => task.id !== taskId))
+  const handleDeleteTask = async (taskId: number) => {
+    await taskApi.deleteTask(String(taskId))
+    await loadPersonal()
   }
 
   const handleFilterChange = (filters: any) => {

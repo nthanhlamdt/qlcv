@@ -23,13 +23,34 @@ export const taskApi = {
   },
 
   async updateTask(taskId: string, data: Partial<TaskInput>) {
-    const res = await putJson(`/tasks/tasks/${taskId}`, data)
+    const res = await putJson(`/tasks/${taskId}`, data)
     return res.data || res
   },
 
   async deleteTask(taskId: string) {
-    const res = await deleteJson(`/tasks/tasks/${taskId}`)
+    const res = await deleteJson(`/tasks/${taskId}`)
     return res
+  },
+
+  async getTask(taskId: string) {
+    const res = await getJson(`/tasks/${taskId}`)
+    return res.data || res
+  },
+
+  async addNote(taskId: string, content: string) {
+    const res = await postJson(`/tasks/${taskId}/notes`, { content })
+    return res.data || res
+  },
+
+  async listPersonal(params: any = {}) {
+    const qs = new URLSearchParams(params).toString()
+    const res = await getJson(`/tasks/personal${qs ? `?${qs}` : ''}`)
+    return res.data || res
+  },
+
+  async createPersonal(data: TaskInput) {
+    const res = await postJson(`/tasks/personal`, data)
+    return res.data || res
   },
 }
 
